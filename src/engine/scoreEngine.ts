@@ -18,7 +18,7 @@ export const cityScoreDefinitions: Record<
     shortLabel: "総合",
     color: "#142436",
     description:
-      "6分野の平均だけでなく、最も弱い分野と分野間の格差も反映します。",
+      "6分野の平均に加えて、最も弱い分野と分野間の格差も反映します。",
   },
 
   transport: {
@@ -73,13 +73,14 @@ function clampScore(value: number): number {
 // 総合評価
 // ==================================================
 
-// 総合評価を計算する
+// 総合評価は以下の3要素から計算する。
 //
-// 単純平均だけでなく、最も低い評価を重視する。
-// また、分野間の差が大きい街には減点を加える。
+// 1. 6分野の平均：85%
+// 2. 最も弱い分野：15%
+// 3. 最も高い分野と低い分野の差：5%減点
 //
-// これにより、産業だけ、環境だけといった
-// 一分野特化では最高評価を得にくくなる。
+// 苦手分野は総合点へ影響するが、
+// 一分野が低いだけで全評価が崩れすぎない設計。
 export function calculateOverallScore(
   scores: Omit<CityScores, "overall">,
 ): number {
@@ -102,11 +103,9 @@ export function calculateOverallScore(
 
   const scoreGap = strongestScore - weakestScore;
 
-  // 平均点を70%、最も弱い分野を30%反映
-  const balancedBaseScore = averageScore * 0.7 + weakestScore * 0.3;
+  const balancedBaseScore = averageScore * 0.85 + weakestScore * 0.15;
 
-  // 分野間格差の12%を減点
-  const imbalancePenalty = scoreGap * 0.12;
+  const imbalancePenalty = scoreGap * 0.05;
 
   return clampScore(balancedBaseScore - imbalancePenalty);
 }
@@ -115,7 +114,6 @@ export function calculateOverallScore(
 // 分野別評価
 // ==================================================
 
-// 街の基本数値から評価ポイントを計算する
 export function calculateCityScores(city: CityState): CityScores {
   // 混雑は低いほど良いため、
   // 100から混雑度を差し引く

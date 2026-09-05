@@ -46,7 +46,6 @@ export function normalizeCityState(city: CityState): CityState {
 }
 
 // 政策効果を街へ反映する
-// 元のcityは変更せず、新しいオブジェクトを返す
 export function applyCityEffects(
   city: CityState,
   effects: PolicyEffects,
@@ -82,23 +81,28 @@ export type AnnualFinanceReport = {
 // 人口と経済から税収を計算する
 function calculateTaxRevenue(city: CityState): number {
   const basicRevenue = 2;
+
   const populationRevenue = city.population / 4000;
+
   const economyRevenue = city.economy * 0.05;
 
   return basicRevenue + populationRevenue + economyRevenue;
 }
 
-// 人口・都市基盤・混雑から年間維持費を計算する
+// 人口・都市基盤・混雑から維持費を計算する
 function calculateMaintenanceCost(city: CityState): number {
   const basicCost = 1;
+
   const populationCost = city.population / 10000;
+
   const infrastructureCost = city.infrastructure * 0.03;
+
   const congestionCost = city.congestion * 0.01;
 
   return basicCost + populationCost + infrastructureCost + congestionCost;
 }
 
-// 財政赤字がある場合の利払い・資金調達負担
+// 赤字自治体に発生する利払い・資金調達負担
 function calculateDebtServiceCost(city: CityState): number {
   if (city.budget >= 0) {
     return 0;
@@ -107,7 +111,7 @@ function calculateDebtServiceCost(city: CityState): number {
   return Math.min(3, Math.abs(city.budget) * 0.01);
 }
 
-// 1年間の税収・維持費を計算する
+// 1年間の税収と支出を計算する
 export function calculateAnnualFinance(city: CityState): AnnualFinanceReport {
   const taxRevenue = calculateTaxRevenue(city);
 
@@ -128,7 +132,91 @@ export function calculateAnnualFinance(city: CityState): AnnualFinanceReport {
   };
 }
 
-// 財政状態によって発生する社会的な影響
+// ==================================================
+// 都市発展による年間負荷
+// ==================================================
+
+// 成長した街では、何もしなくても問題が発生する。
+// 高い指標ほど維持が難しくなり、政策による対処が必要になる。
+export function getAnnualDevelopmentEffects(city: CityState): PolicyEffects {
+  const effects: PolicyEffects = {};
+
+  // 高成長を維持するには、継続的な産業政策が必要
+  if (city.economy >= 85) {
+    effects.economy = -2;
+  } else if (city.economy >= 60) {
+    effects.economy = -1;
+  }
+
+  // 道路・公共施設・上下水道などは毎年老朽化する
+  if (city.infrastructure >= 85) {
+    effects.infrastructure = -2;
+  } else if (city.infrastructure >= 55) {
+    effects.infrastructure = -1;
+  }
+
+  // 高い満足度を維持するほど住民の期待も高くなる
+  if (city.happiness >= 80) {
+    effects.happiness = -2;
+  } else if (city.happiness >= 65) {
+    effects.happiness = -1;
+  }
+
+  // 市政への信頼も、成果がなければ徐々に薄れる
+  if (city.trust >= 80) {
+    effects.trust = -2;
+  } else if (city.trust >= 65) {
+    effects.trust = -1;
+  }
+
+  // 人口と産業が増えるほど交通需要が増える
+  let congestionChange = 0;
+
+  if (city.population >= 9500) {
+    congestionChange += 1;
+  }
+
+  if (city.economy >= 65) {
+    congestionChange += 1;
+  }
+
+  // 十分な都市基盤があれば混雑増加を一部吸収できる
+  if (city.infrastructure >= 75) {
+    congestionChange -= 1;
+  }
+
+  if (congestionChange !== 0) {
+    effects.congestion = congestionChange;
+  }
+
+  // 産業発展と人口集中は環境へ負荷を与える
+  let environmentChange = 0;
+
+  if (city.economy >= 60) {
+    environmentChange -= 1;
+  }
+
+  if (city.population >= 11500) {
+    environmentChange -= 1;
+  }
+
+  // 環境が大きく悪化した場合は、
+  // 自然回復と社会的な対策圧力が働く
+  if (city.environment <= 35) {
+    environmentChange += 1;
+  }
+
+  if (environmentChange !== 0) {
+    effects.environment = environmentChange;
+  }
+
+  return effects;
+}
+
+// ==================================================
+// 財政悪化による影響
+// ==================================================
+
 function getFiscalStressEffects(budget: number): PolicyEffects {
   if (budget <= -100) {
     return {
@@ -160,12 +248,15 @@ function getFiscalStressEffects(budget: number): PolicyEffects {
   return {};
 }
 
-// 通常政策を実施した年度の税収・維持費と
-// 財政悪化による社会的影響を反映する
+// ==================================================
+// 年間変化の反映
+// ==================================================
+
 export function applyAnnualCityDynamics(city: CityState): {
   city: CityState;
   finance: AnnualFinanceReport;
 } {
+  // その年度の財政収支
   const finance = calculateAnnualFinance(city);
 
   const cityAfterFinance = normalizeCityState({
@@ -173,10 +264,21 @@ export function applyAnnualCityDynamics(city: CityState): {
     budget: city.budget + finance.balance,
   });
 
-  const fiscalStressEffects = getFiscalStressEffects(cityAfterFinance.budget);
+  // 都市発展に伴う老朽化・混雑・環境負荷
+  const developmentEffects = getAnnualDevelopmentEffects(cityAfterFinance);
+
+  const cityAfterDevelopment = applyCityEffects(
+    cityAfterFinance,
+    developmentEffects,
+  );
+
+  // 財政赤字による社会的影響
+  const fiscalStressEffects = getFiscalStressEffects(
+    cityAfterDevelopment.budget,
+  );
 
   const cityAfterFiscalStress = applyCityEffects(
-    cityAfterFinance,
+    cityAfterDevelopment,
     fiscalStressEffects,
   );
 
@@ -190,8 +292,6 @@ export function applyAnnualCityDynamics(city: CityState): {
 // 発展段階
 // ==================================================
 
-// 発展条件を満たしていれば次の段階へ進める
-// 一度の政策で進めるのは一段階だけ
 export function updateDevelopmentStage(city: CityState): CityState {
   const nextStage = getNextStage(city);
 
@@ -217,7 +317,7 @@ export type RegularPolicyExecutionResult = {
   annualFinance: AnnualFinanceReport;
 };
 
-// 通常政策では、政策効果と年間財政を反映し、
+// 通常政策では、政策効果と年間変化を反映し、
 // その後に年度を1年進める
 export function executeRegularPolicy(
   city: CityState,
@@ -225,14 +325,12 @@ export function executeRegularPolicy(
 ): RegularPolicyExecutionResult {
   const previousStage = city.stage;
 
-  // 政策そのものの効果
+  // プレイヤーが選んだ政策の直接効果
   const cityAfterPolicy = applyCityEffects(city, effects);
 
-  // その年度の税収・維持費・財政ストレス
+  // 税収、維持費、老朽化、混雑などの年間変化
   const annualDynamics = applyAnnualCityDynamics(cityAfterPolicy);
 
-  // 50年目の政策を実施した場合は
-  // それ以上年度を増やさない
   const gameFinished = city.year >= GAME_DURATION_YEARS;
 
   const cityAfterYearAdvance: CityState = {
@@ -241,8 +339,6 @@ export function executeRegularPolicy(
     year: gameFinished ? GAME_DURATION_YEARS : city.year + 1,
   };
 
-  // 政策実行後の数値と年度から
-  // 次の発展段階へ進めるか判定する
   const updatedCity = updateDevelopmentStage(cityAfterYearAdvance);
 
   return {
