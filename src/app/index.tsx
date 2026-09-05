@@ -33,7 +33,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.startArea}>
         <Text style={styles.logo}>市</Text>
-        <Text style={styles.title}>まちのけひき</Text>
+        <Text style={styles.title}>まちのかけひき</Text>
 
         <Text style={styles.description}>
           政策と交渉によって街の50年間をつくる まちづくりゲーム
