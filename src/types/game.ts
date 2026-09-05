@@ -30,7 +30,7 @@ export type CityState = {
 // 年度・発展段階以外の数値項目
 export type CityMetric = Exclude<keyof CityState, "year" | "stage">;
 
-// 政策による街の増減
+// 政策による街の変化
 export type PolicyEffects = Partial<Record<CityMetric, number>>;
 
 // ==================================================
@@ -73,18 +73,14 @@ export type PolicyDomain =
 // ==================================================
 
 export type PolicyConditions = {
-  // 表示できる最初と最後の年度
   minimumYear?: number;
   maximumYear?: number;
 
-  // 人口条件
   minimumPopulation?: number;
   maximumPopulation?: number;
 
-  // 各指標の最低条件
   minimumMetrics?: Partial<Record<CityMetric, number>>;
 
-  // 各指標の最大条件
   maximumMetrics?: Partial<Record<CityMetric, number>>;
 };
 
@@ -101,29 +97,21 @@ export type BasePolicy = {
   reason: string;
   theory: string;
 
-  // 完成版で使用する政策情報
   category?: PolicyCategory;
   domain?: PolicyDomain;
 
-  // 表示できる発展段階
   stages?: DevelopmentStage[];
 
-  // 発生条件
   conditions?: PolicyConditions;
 
-  // 数値が大きい政策ほど出やすくなる
   weight?: number;
 
-  // 一度出た後、再登場まで空ける年数
   cooldown?: number;
 
-  // 複数回出せる政策か
   repeatable?: boolean;
 
-  // 関係する主体
   actors?: string[];
 
-  // 都市史や検索に使う分類
   tags?: string[];
 };
 
@@ -145,18 +133,16 @@ export type PolicyOption = {
   label: string;
   description: string;
 
-  // この選択肢を選んだ場合の効果
   effects: PolicyEffects;
 
-  // 政策結果に表示する文章
   resultMessage?: string;
 };
 
 export type StrategyPolicy = BasePolicy & {
   type: "strategy";
+
   options: PolicyOption[];
 
-  // 街の状態によって結果を変える場合に使用する
   calculateResult?: (option: PolicyOption, city: CityState) => PolicyResult;
 };
 
@@ -175,14 +161,11 @@ export type NumericPolicy = BasePolicy & {
   step: number;
   defaultValue: number;
 
-  // バーを動かしたときに表示する予測
   getForecast: (value: number, city: CityState) => string;
 
-  // 政策実行時の結果
   calculateResult: (value: number, city: CityState) => PolicyResult;
 };
 
-// 戦略政策と数値政策の共通型
 export type Policy = StrategyPolicy | NumericPolicy;
 
 // ==================================================
@@ -199,6 +182,23 @@ export type DevelopmentModelData = {
 };
 
 // ==================================================
+// 年間財政
+// ==================================================
+
+export type AnnualFinanceRecord = {
+  developmentModel: DevelopmentModel;
+
+  baseRevenue: number;
+  modelRevenue: number;
+  taxRevenue: number;
+
+  maintenanceCost: number;
+  debtServiceCost: number;
+
+  balance: number;
+};
+
+// ==================================================
 // ゲームの進行状態
 // ==================================================
 
@@ -210,7 +210,7 @@ export type GamePhase =
   | "finished";
 
 // ==================================================
-// 都市史
+// 政策履歴
 // ==================================================
 
 export type HistoryEntry = {
@@ -224,7 +224,12 @@ export type HistoryEntry = {
   decision: string;
   result: string;
 
+  // 選択した政策そのものの効果
   effects: PolicyEffects;
+
+  // 通常政策を実施した年度の
+  // 税収・維持費・収支
+  annualFinance?: AnnualFinanceRecord;
 };
 
 // ==================================================
@@ -254,33 +259,23 @@ export type GameState = {
   city: CityState;
   phase: GamePhase;
 
-  // 現在表示している政策
   currentPolicyId: string | null;
 
-  // 発展段階ごとの都市戦略を実行したか
   completedStageStrategies: DevelopmentStage[];
 
-  // 最近表示した通常政策
   recentPolicyIds: string[];
 
-  // すでに実行した政策
   completedPolicyIds: string[];
 
-  // 現在採用している成長モデル
   developmentModel: DevelopmentModel;
 
-  // 最後に成長モデルを見直した年度
   lastStrategyReviewYear: number;
 
-  // 成長モデルを変更した回数
   strategySwitchCount: number;
 
-  // 都市史
   history: HistoryEntry[];
 
-  // 折れ線グラフ用データ
   timeline: TimelinePoint[];
 
-  // 50年間のゲームが終了したか
   isFinished: boolean;
 };

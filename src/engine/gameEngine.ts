@@ -89,8 +89,6 @@ export function createInitialGameState(): GameState {
 
     timeline: [createTimelinePoint(city, 0)],
 
-    // 最初の発展段階戦略で
-    // 正式なモデルへ更新される
     developmentModel: "living",
 
     lastStrategyReviewYear: 0,
@@ -182,6 +180,7 @@ function calculateStrategyResult(
 
   return {
     effects: option.effects,
+
     message: option.resultMessage ?? `「${option.label}」を実行しました。`,
   };
 }
@@ -276,7 +275,9 @@ function prepareStrategyReview(state: GameState): GameState | null {
 
   const shouldReview = shouldTriggerStrategyReview({
     city: state.city,
+
     lastStrategyReviewYear: state.lastStrategyReviewYear,
+
     availableReviewCount: availableReviews.length,
   });
 
@@ -349,6 +350,7 @@ function calculateDevelopmentModelUpdate(
   if (!selectedOptionId) {
     return {
       developmentModel: currentModel,
+
       switched: false,
     };
   }
@@ -358,17 +360,17 @@ function calculateDevelopmentModelUpdate(
   if (!selectedModel) {
     return {
       developmentModel: currentModel,
+
       switched: false,
     };
   }
 
-  // 最初のモデル選択は
-  // 戦略変更回数へ含めない
   const switched =
     category === "strategyReview" && selectedModel !== currentModel;
 
   return {
     developmentModel: selectedModel,
+
     switched,
   };
 }
@@ -417,10 +419,16 @@ function completeDecision({
     const execution = executeRegularPolicy(
       state.city,
       result.effects,
-
-      // 現在の発展モデルを年間財政へ渡す
       modelUpdate.developmentModel,
     );
+
+    // 政策結果の履歴へ、
+    // その年度の税収・維持費・収支を追加する
+    const regularHistoryEntry: HistoryEntry = {
+      ...historyEntry,
+
+      annualFinance: execution.annualFinance,
+    };
 
     const updatedState: GameState = {
       ...state,
@@ -438,7 +446,7 @@ function completeDecision({
       completedPolicyIds,
       recentPolicyIds,
 
-      history: [...state.history, historyEntry],
+      history: [...state.history, regularHistoryEntry],
 
       timeline: [
         ...state.timeline,
@@ -487,8 +495,6 @@ function completeDecision({
         : state.lastStrategyReviewYear,
   };
 
-  // 戦略課題・見直しの後は、
-  // 同じ年度の通常政策を表示する
   return prepareRegularPolicy(updatedState);
 }
 
@@ -523,8 +529,11 @@ export function executeStrategyDecision(
   return completeDecision({
     state,
     policy,
+
     decision: selectedOption.label,
+
     result,
+
     selectedOptionId: selectedOption.id,
   });
 }
@@ -554,7 +563,9 @@ export function executeNumericDecision(
   return completeDecision({
     state,
     policy,
+
     decision: `${policy.valueLabel}：${safeValue}${policy.unit}`,
+
     result,
   });
 }
