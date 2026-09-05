@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -14,7 +15,6 @@ import {
   loadAnalyticsConsent,
   saveAnalyticsConsent,
 } from "../analytics/analyticsConsent";
-
 import { clearAnalyticsSession } from "../analytics/gameAnalytics";
 
 import type { AnalyticsConsentChoice } from "../analytics/analyticsConsent";
@@ -120,12 +120,10 @@ export default function HomeScreen() {
     try {
       await saveAnalyticsConsent(choice);
 
-      // 古い分析セッションが残っている場合に備えて、
-      // 最初の選択時にいったん削除する。
+      // 古い匿名セッションが残っている場合に備えて削除する
       await clearAnalyticsSession();
     } catch {
-      // 保存に失敗した場合は、次回起動時に
-      // 同意画面が再表示される。
+      // 保存に失敗した場合でも、選択された設定でゲームを続行する
     }
 
     setAnalyticsConsent(choice);
@@ -141,14 +139,12 @@ export default function HomeScreen() {
     try {
       await saveAnalyticsConsent(choice);
 
-      // オフにした場合は送信を停止する。
-      // 再びオンにした場合は、次回の政策選択時に
-      // 新しい匿名セッションを開始する。
+      // 設定変更後は新しい匿名セッションを使用する
       await clearAnalyticsSession();
 
       setAnalyticsConsent(choice);
     } catch (error) {
-      console.warn("分析データの設定を変更できませんでした。", error);
+      console.warn("プレイデータの設定を変更できませんでした。", error);
     } finally {
       setIsAnalyticsConsentUpdating(false);
     }
@@ -159,10 +155,11 @@ export default function HomeScreen() {
     setHasEnteredGame(false);
   }
 
-  // ==================================================
-  // セーブデータ・同意状態の読み込み中
-  // ==================================================
+  function openPrivacyPolicy() {
+    router.push("/privacy");
+  }
 
+  // セーブデータと同意状態の読み込み中
   if (isLoading || isConsentLoading) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
@@ -177,10 +174,7 @@ export default function HomeScreen() {
     );
   }
 
-  // ==================================================
-  // 分析データ収集への同意画面
-  // ==================================================
-
+  // プレイデータ収集への同意画面
   if (analyticsConsent === null) {
     return (
       <AnalyticsConsentScreen
@@ -194,10 +188,7 @@ export default function HomeScreen() {
     );
   }
 
-  // ==================================================
   // ゲーム説明画面
-  // ==================================================
-
   if (!hasEnteredGame) {
     return (
       <SafeAreaView style={styles.introScreen}>
@@ -212,33 +203,43 @@ export default function HomeScreen() {
     );
   }
 
-  // ==================================================
   // 50年終了後の結果画面
-  // ==================================================
-
   if (gameState.isFinished || gameState.phase === "finished") {
     return (
       <SafeAreaView style={styles.resultScreen}>
         <StatusBar style="light" />
 
         <View style={styles.resultHeader}>
-          <View>
+          <View style={styles.resultHeaderTextArea}>
             <Text style={styles.resultAppName}>まちのかけひき</Text>
-
             <Text style={styles.resultHeaderText}>市政結果</Text>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="データ設定を開く"
-            onPress={() => setIsAnalyticsSettingsVisible(true)}
-            style={({ pressed }) => [
-              styles.headerSettingsButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <Text style={styles.headerSettingsButtonText}>データ設定</Text>
-          </Pressable>
+          <View style={styles.resultHeaderActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="プライバシーポリシーを開く"
+              onPress={openPrivacyPolicy}
+              style={({ pressed }) => [
+                styles.headerUtilityButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.headerUtilityButtonText}>プライバシー</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="プレイデータの設定を開く"
+              onPress={() => setIsAnalyticsSettingsVisible(true)}
+              style={({ pressed }) => [
+                styles.headerUtilityButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.headerUtilityButtonText}>データ設定</Text>
+            </Pressable>
+          </View>
         </View>
 
         <GameResultScreen gameState={gameState} onRestart={handleRestart} />
@@ -256,10 +257,7 @@ export default function HomeScreen() {
     );
   }
 
-  // ==================================================
   // 通常のゲーム画面
-  // ==================================================
-
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
@@ -284,7 +282,9 @@ export default function HomeScreen() {
 
         {saveError && (
           <View style={styles.saveErrorBox}>
-            <Text style={styles.saveErrorTitle}>保存できませんでした</Text>
+            <Text style={styles.saveErrorTitle}>
+              ゲームを保存できませんでした
+            </Text>
 
             <Text style={styles.saveErrorText}>{saveError}</Text>
           </View>
@@ -322,6 +322,8 @@ export default function HomeScreen() {
               </Text>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="最初からやり直す"
                 onPress={() => {
                   void handleRestart();
                 }}
@@ -341,9 +343,7 @@ export default function HomeScreen() {
             <Text style={styles.footerTitle}>まちのかけひき</Text>
 
             <Text style={styles.footerText}>
-              政策に正解は一つではありません。
-              誰が利益を得て、誰が費用を負担するのかを考えながら、
-              50年間の市政を進めてください。
+              政策に正解は一つではありません。誰が利益を得て、誰が費用を負担するのかを考えながら、50年間の市政を進めてください。
             </Text>
 
             <View style={styles.saveStatus}>
@@ -365,7 +365,7 @@ export default function HomeScreen() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="データ設定を開く"
+              accessibilityLabel="プレイデータの設定を開く"
               onPress={() => setIsAnalyticsSettingsVisible(true)}
               style={({ pressed }) => [
                 styles.dataSettingsButton,
@@ -375,6 +375,18 @@ export default function HomeScreen() {
               <Text style={styles.dataSettingsButtonText}>
                 プレイデータの設定
               </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="プライバシーポリシーを開く"
+              onPress={openPrivacyPolicy}
+              style={({ pressed }) => [
+                styles.privacyButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.privacyButtonText}>プライバシーポリシー</Text>
             </Pressable>
           </View>
         </View>
@@ -448,6 +460,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
+  resultHeaderTextArea: {
+    flex: 1,
+  },
+
   resultAppName: {
     color: "#FFFFFF",
     fontSize: 17,
@@ -461,18 +477,24 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  headerSettingsButton: {
+  resultHeaderActions: {
+    marginLeft: 10,
+    flexDirection: "row",
+    gap: 6,
+  },
+
+  headerUtilityButton: {
     minHeight: 38,
-    paddingHorizontal: 13,
+    paddingHorizontal: 9,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#557084",
   },
 
-  headerSettingsButtonText: {
+  headerUtilityButtonText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
 
@@ -596,5 +618,19 @@ const styles = StyleSheet.create({
     color: "#C5D5DE",
     fontSize: 11,
     fontWeight: "700",
+  },
+
+  privacyButton: {
+    minHeight: 42,
+    marginTop: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  privacyButtonText: {
+    color: "#A9C1CF",
+    fontSize: 10,
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
 });

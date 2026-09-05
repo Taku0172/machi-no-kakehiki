@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // 同意文の内容を変更した場合は、この数字を増やす。
 // バージョンが変わると、ユーザーへ同意画面を再表示できる。
-const CURRENT_CONSENT_VERSION = 1;
+const CURRENT_CONSENT_VERSION = 2;
 
 const ANALYTICS_CONSENT_STORAGE_KEY = "@machi_no_kakehiki/analytics_consent";
 
