@@ -1,16 +1,14 @@
-// Reactの状態管理機能
+import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 
-// Expoのステータスバー
-import { StatusBar } from "expo-status-bar";
-
-// React Nativeの画面部品
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-// ゲーム開始時の街データ
+import { PolicyCard } from "../components/PolicyCard";
 import { initialCityState } from "../data/initialCityState";
+import { firstPolicy } from "../data/policies";
+import { CityMetric } from "../types/game";
 
-// 発展段階の英語データを日本語表示へ変換
+// 発展段階の日本語名
 const stageNames = {
   creation: "創生期",
   growth: "成長期",
@@ -20,17 +18,58 @@ const stageNames = {
 };
 
 export default function HomeScreen() {
-  // 現在の街の状態をReactで管理する
-  const [city] = useState(initialCityState);
+  // 現在の街の状態
+  const [city, setCity] = useState(initialCityState);
+
+  // 現在選択している戦略
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+
+  // 政策実行後に表示する文章
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
+
+  // 選択した戦略を実行する
+  function executePolicy() {
+    const selectedOption = firstPolicy.options.find(
+      (option) => option.id === selectedOptionId,
+    );
+
+    // 戦略が選択されていなければ何もしない
+    if (!selectedOption) {
+      return;
+    }
+
+    setCity((currentCity) => {
+      // 現在の街をコピーする
+      const updatedCity = { ...currentCity };
+
+      // 選択した戦略の効果を順番に反映する
+      Object.entries(selectedOption.effects).forEach(([key, value]) => {
+        const metric = key as CityMetric;
+        const change = value ?? 0;
+
+        updatedCity[metric] += change;
+
+        // 人口と財政以外は0〜100の範囲に収める
+        if (metric !== "population" && metric !== "budget") {
+          updatedCity[metric] = Math.max(0, Math.min(100, updatedCity[metric]));
+        }
+      });
+
+      return updatedCity;
+    });
+
+    setResultMessage(`「${selectedOption.label}」を実行しました。`);
+  }
 
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
 
-      {/* 上部のタイトルと年度 */}
+      {/* タイトルと年度 */}
       <View style={styles.header}>
         <View>
           <Text style={styles.appName}>まちのかけひき</Text>
+
           <Text style={styles.subtitle}>政策選択型まちづくりゲーム</Text>
         </View>
 
@@ -41,16 +80,18 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* 現在の発展段階 */}
+        {/* 発展段階 */}
         <View style={styles.stageCard}>
           <Text style={styles.sectionLabel}>CITY STAGE</Text>
+
           <Text style={styles.stageName}>{stageNames[city.stage]}</Text>
+
           <Text style={styles.stageDescription}>
             街を動かす財源と合意をつくる段階
           </Text>
         </View>
 
-        {/* 街の数値 */}
+        {/* 街の状態 */}
         <Text style={styles.heading}>街の状態</Text>
 
         <View style={styles.metrics}>
@@ -70,19 +111,35 @@ export default function HomeScreen() {
 
           <MetricCard label="信頼" value={city.trust} unit="pt" />
         </View>
+
+        {/* 最初の政策課題 */}
+        <PolicyCard
+          policy={firstPolicy}
+          selectedOptionId={selectedOptionId}
+          onSelectOption={setSelectedOptionId}
+          onExecute={executePolicy}
+        />
+
+        {/* 政策実行後の結果 */}
+        {resultMessage && (
+          <View style={styles.resultBox}>
+            <Text style={styles.resultLabel}>政策結果</Text>
+
+            <Text style={styles.resultText}>{resultMessage}</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-// 数値カードが受け取るデータの型
 type MetricCardProps = {
   label: string;
   value: number | string;
   unit: string;
 };
 
-// 同じ形の数値カードを繰り返し表示する部品
+// 街の数値を表示する共通部品
 function MetricCard({ label, value, unit }: MetricCardProps) {
   return (
     <View style={styles.metricCard}>
@@ -96,7 +153,6 @@ function MetricCard({ label, value, unit }: MetricCardProps) {
   );
 }
 
-// 画面のデザイン
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -142,7 +198,7 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 14,
-    paddingBottom: 40,
+    paddingBottom: 50,
   },
 
   stageCard: {
@@ -210,5 +266,25 @@ const styles = StyleSheet.create({
     color: "#65717D",
     fontSize: 11,
     fontWeight: "normal",
+  },
+
+  resultBox: {
+    marginTop: 12,
+    padding: 15,
+    backgroundColor: "#E4EEE9",
+    borderLeftWidth: 4,
+    borderLeftColor: "#2D755E",
+  },
+
+  resultLabel: {
+    color: "#2D755E",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  resultText: {
+    marginTop: 4,
+    color: "#142436",
+    fontSize: 15,
   },
 });
