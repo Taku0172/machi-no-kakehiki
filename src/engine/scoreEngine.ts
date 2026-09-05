@@ -1,6 +1,9 @@
 import type { CityScoreKey, CityScores, CityState } from "../types/game";
 
+// ==================================================
 // 評価項目の表示設定
+// ==================================================
+
 export const cityScoreDefinitions: Record<
   CityScoreKey,
   {
@@ -14,7 +17,8 @@ export const cityScoreDefinitions: Record<
     label: "総合評価",
     shortLabel: "総合",
     color: "#142436",
-    description: "6種類の街評価を総合したポイントです。",
+    description:
+      "6分野の平均だけでなく、最も弱い分野と分野間の格差も反映します。",
   },
 
   transport: {
@@ -49,14 +53,14 @@ export const cityScoreDefinitions: Record<
     label: "財政評価",
     shortLabel: "財政",
     color: "#76588E",
-    description: "自治体が政策へ使える財政余力を表します。",
+    description: "自治体が将来の政策に使える財政余力を表します。",
   },
 
   trust: {
     label: "信頼評価",
     shortLabel: "信頼",
     color: "#2D755E",
-    description: "住民や企業から市政への信頼を表します。",
+    description: "住民や企業から市政へ寄せられる信頼を表します。",
   },
 };
 
@@ -65,24 +69,56 @@ function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+// ==================================================
+// 総合評価
+// ==================================================
+
 // 総合評価を計算する
+//
+// 単純平均だけでなく、最も低い評価を重視する。
+// また、分野間の差が大きい街には減点を加える。
+//
+// これにより、産業だけ、環境だけといった
+// 一分野特化では最高評価を得にくくなる。
 export function calculateOverallScore(
   scores: Omit<CityScores, "overall">,
 ): number {
-  const total =
-    scores.transport +
-    scores.industry +
-    scores.living +
-    scores.environment +
-    scores.finance +
-    scores.trust;
+  const scoreValues = [
+    scores.transport,
+    scores.industry,
+    scores.living,
+    scores.environment,
+    scores.finance,
+    scores.trust,
+  ];
 
-  return Math.round(total / 6);
+  const total = scoreValues.reduce((sum, score) => sum + score, 0);
+
+  const averageScore = total / scoreValues.length;
+
+  const weakestScore = Math.min(...scoreValues);
+
+  const strongestScore = Math.max(...scoreValues);
+
+  const scoreGap = strongestScore - weakestScore;
+
+  // 平均点を70%、最も弱い分野を30%反映
+  const balancedBaseScore = averageScore * 0.7 + weakestScore * 0.3;
+
+  // 分野間格差の12%を減点
+  const imbalancePenalty = scoreGap * 0.12;
+
+  return clampScore(balancedBaseScore - imbalancePenalty);
 }
+
+// ==================================================
+// 分野別評価
+// ==================================================
 
 // 街の基本数値から評価ポイントを計算する
 export function calculateCityScores(city: CityState): CityScores {
-  // 混雑は低い方が良いため、100から差し引く
+  // 混雑は低いほど良いため、
+  // 100から混雑度を差し引く
   const congestionComfort = 100 - city.congestion;
 
   const baseScores: Omit<CityScores, "overall"> = {
@@ -98,7 +134,8 @@ export function calculateCityScores(city: CityState): CityScores {
 
     environment: clampScore(city.environment),
 
-    // 財政はマイナスになり得るが、評価表示は0〜100
+    // 財政はマイナスなら0点、
+    // 100億円以上なら100点
     finance: clampScore(city.budget),
 
     trust: clampScore(city.trust),
@@ -106,11 +143,15 @@ export function calculateCityScores(city: CityState): CityScores {
 
   return {
     overall: calculateOverallScore(baseScores),
+
     ...baseScores,
   };
 }
 
-// 総合評価をランクへ変換する
+// ==================================================
+// 評価ランク
+// ==================================================
+
 export function getCityRank(overallScore: number): "S" | "A" | "B" | "C" | "D" {
   if (overallScore >= 85) {
     return "S";
@@ -131,23 +172,35 @@ export function getCityRank(overallScore: number): "S" | "A" | "B" | "C" | "D" {
   return "D";
 }
 
-// 前回から評価がどれだけ変化したか計算する
+// ==================================================
+// 前年度からの変化
+// ==================================================
+
 export function calculateScoreChanges(
   currentScores: CityScores,
   previousScores: CityScores,
 ): CityScores {
   return {
     overall: currentScores.overall - previousScores.overall,
+
     transport: currentScores.transport - previousScores.transport,
+
     industry: currentScores.industry - previousScores.industry,
+
     living: currentScores.living - previousScores.living,
+
     environment: currentScores.environment - previousScores.environment,
+
     finance: currentScores.finance - previousScores.finance,
+
     trust: currentScores.trust - previousScores.trust,
   };
 }
 
-// 評価値に応じた短いコメントを返す
+// ==================================================
+// 評価コメント
+// ==================================================
+
 export function getScoreComment(score: number): string {
   if (score >= 85) {
     return "非常に良好";
