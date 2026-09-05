@@ -24,7 +24,6 @@ import { useGame } from "../hooks/useGame";
 import type { CityState } from "../types/game";
 
 export default function HomeScreen() {
-  // 起動後、説明画面を通過したか
   const [hasEnteredGame, setHasEnteredGame] = useState(false);
 
   const {
@@ -43,11 +42,13 @@ export default function HomeScreen() {
     startNewGame,
   } = useGame();
 
-  // 保存済みのプレイ履歴があるか
   const hasExistingProgress =
     gameState.history.length > 0 || gameState.city.year > 1;
 
-  // 直前の通常政策実行前の状態
+  // 創生期の最初の成長モデルを選択済みか
+  const hasChosenDevelopmentModel =
+    gameState.completedStageStrategies.includes("creation");
+
   const previousTimelinePoint = useMemo(() => {
     if (gameState.timeline.length < 2) {
       return null;
@@ -84,11 +85,9 @@ export default function HomeScreen() {
     };
   }, [previousTimelinePoint, city.stage]);
 
-  // 終了画面から新しいゲームを始める
   async function handleRestart() {
     await startNewGame();
 
-    // 新しい街では説明画面へ戻す
     setHasEnteredGame(false);
   }
 
@@ -165,6 +164,7 @@ export default function HomeScreen() {
         <GameHeader
           city={city}
           developmentModel={gameState.developmentModel}
+          hasChosenDevelopmentModel={hasChosenDevelopmentModel}
           isSaving={isSaving}
         />
 
