@@ -1,4 +1,4 @@
-import { NumericPolicy, StrategyPolicy } from "../types/game";
+import { NumericPolicy, Policy, StrategyPolicy } from "../types/game";
 
 // 最初に表示する都市戦略
 export const firstPolicy: StrategyPolicy = {
@@ -117,3 +117,10 @@ export const waterPolicy: NumericPolicy = {
     };
   },
 };
+
+// 発展段階ごとに一度だけ出る都市戦略
+export const cityStrategies: StrategyPolicy[] = [firstPolicy];
+
+// 毎年実行する通常政策
+// 戦略選択型と数値選択型を混在できる
+export const regularPolicies: Policy[] = [waterPolicy];

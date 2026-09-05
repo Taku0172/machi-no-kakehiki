@@ -79,3 +79,7 @@ export type NumericPolicy = {
   // 政策実行時の結果計算
   calculateResult: (value: number, city: CityState) => PolicyResult;
 };
+
+// ゲーム内で扱う政策課題
+// 今後は戦略型と数値型を同じ配列に入れられる
+export type Policy = StrategyPolicy | NumericPolicy;
