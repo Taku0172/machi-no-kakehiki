@@ -1,4 +1,5 @@
 import { createInitialCityState } from "../data/initialCityState";
+
 import {
     findPolicyById,
     regularPolicyCatalog,
@@ -7,6 +8,7 @@ import {
 } from "../data/policyCatalog";
 
 import { executeAdditionalDecision, executeRegularPolicy } from "./cityEngine";
+
 import {
     getDevelopmentModelFromOption,
     selectRegularPolicy,
@@ -14,6 +16,7 @@ import {
     selectStrategyReview,
     shouldTriggerStrategyReview,
 } from "./policySelector";
+
 import { calculateCityScores } from "./scoreEngine";
 
 import type {
@@ -86,13 +89,12 @@ export function createInitialGameState(): GameState {
 
     timeline: [createTimelinePoint(city, 0)],
 
-    // 最初の戦略課題で正式なモデルへ更新される
+    // 最初の発展段階戦略で
+    // 正式なモデルへ更新される
     developmentModel: "living",
 
-    // まだ戦略見直しを実施していない
     lastStrategyReviewYear: 0,
 
-    // 戦略見直しで成長モデルを変更した回数
     strategySwitchCount: 0,
 
     isFinished: false,
@@ -331,7 +333,7 @@ function prepareNextYear(state: GameState, stageChanged: boolean): GameState {
 }
 
 // ==================================================
-// 成長モデルの変更
+// 発展モデルの変更
 // ==================================================
 
 type DevelopmentModelUpdate = {
@@ -360,7 +362,8 @@ function calculateDevelopmentModelUpdate(
     };
   }
 
-  // 最初の成長モデル選択は乗り換え回数に含めない
+  // 最初のモデル選択は
+  // 戦略変更回数へ含めない
   const switched =
     category === "strategyReview" && selectedModel !== currentModel;
 
@@ -371,7 +374,7 @@ function calculateDevelopmentModelUpdate(
 }
 
 // ==================================================
-// 政策実行
+// 政策実行の共通処理
 // ==================================================
 
 type CompleteDecisionOptions = {
@@ -411,7 +414,13 @@ function completeDecision({
   // ==================================================
 
   if (category === "regularPolicy") {
-    const execution = executeRegularPolicy(state.city, result.effects);
+    const execution = executeRegularPolicy(
+      state.city,
+      result.effects,
+
+      // 現在の発展モデルを年間財政へ渡す
+      modelUpdate.developmentModel,
+    );
 
     const updatedState: GameState = {
       ...state,
@@ -433,6 +442,7 @@ function completeDecision({
 
       timeline: [
         ...state.timeline,
+
         createTimelinePoint(execution.city, state.city.year),
       ],
 
@@ -477,7 +487,7 @@ function completeDecision({
         : state.lastStrategyReviewYear,
   };
 
-  // 戦略課題・見直しの後、
+  // 戦略課題・見直しの後は、
   // 同じ年度の通常政策を表示する
   return prepareRegularPolicy(updatedState);
 }
@@ -544,7 +554,7 @@ export function executeNumericDecision(
   return completeDecision({
     state,
     policy,
-    decision: `${policy.valueLabel}：` + `${safeValue}${policy.unit}`,
+    decision: `${policy.valueLabel}：${safeValue}${policy.unit}`,
     result,
   });
 }
