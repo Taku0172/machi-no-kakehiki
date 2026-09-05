@@ -1,4 +1,4 @@
-import { StrategyPolicy } from "../types/game";
+import { NumericPolicy, StrategyPolicy } from "../types/game";
 
 // 最初に表示する都市戦略
 export const firstPolicy: StrategyPolicy = {
@@ -55,4 +55,65 @@ export const firstPolicy: StrategyPolicy = {
       },
     },
   ],
+};
+
+// 最初の通常政策
+export const waterPolicy: NumericPolicy = {
+  id: "water-fund",
+  type: "numeric",
+
+  title: "上水道延伸の共同負担",
+
+  description:
+    "郊外へ水道を延ばすには18億円必要です。市の先行拠出額を決めます。",
+
+  reason: "住宅候補地は広がりましたが、生活基盤が中心部に限られています。",
+
+  theory: "閾値公共財ゲーム",
+
+  valueLabel: "市の先行拠出",
+  unit: "億円",
+  min: 0,
+  max: 18,
+  step: 1,
+  defaultValue: 8,
+
+  getForecast: (value, city) => {
+    // 信頼が高いほど、住民や企業も多く負担する
+    const otherContribution = Math.max(3, Math.round(city.trust / 7));
+
+    const total = value + otherContribution;
+
+    return `他主体の予想拠出は${otherContribution}億円です。合計は${total}億円になる見込みです。`;
+  },
+
+  calculateResult: (value, city) => {
+    // 信頼度から他主体の拠出額を計算
+    const otherContribution = Math.max(3, Math.round(city.trust / 7));
+
+    // 合計18億円以上なら水道延伸に成功
+    const isSuccessful = value + otherContribution >= 18;
+
+    if (isSuccessful) {
+      return {
+        effects: {
+          budget: -value,
+          infrastructure: 11,
+          population: 520,
+          trust: 5,
+        },
+        message: `住民と企業が${otherContribution}億円を拠出し、水道延伸が実現しました。`,
+      };
+    }
+
+    return {
+      effects: {
+        budget: -value,
+        infrastructure: 2,
+        population: 40,
+        trust: -4,
+      },
+      message: `他主体の拠出は${otherContribution}億円でした。必要額に届かず、小規模な補修だけで終わりました。`,
+    };
+  },
 };

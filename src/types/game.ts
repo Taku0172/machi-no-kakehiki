@@ -49,3 +49,33 @@ export type StrategyPolicy = {
   theory: string;
   options: PolicyOption[];
 };
+
+// 数値政策を実行した結果
+export type PolicyResult = {
+  effects: PolicyEffects;
+  message: string;
+};
+
+// バーで数値を決める政策課題
+export type NumericPolicy = {
+  id: string;
+  type: "numeric";
+  title: string;
+  description: string;
+  reason: string;
+  theory: string;
+
+  // バーに表示する設定
+  valueLabel: string;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  defaultValue: number;
+
+  // 現在の数値に応じた予測
+  getForecast: (value: number, city: CityState) => string;
+
+  // 政策実行時の結果計算
+  calculateResult: (value: number, city: CityState) => PolicyResult;
+};
