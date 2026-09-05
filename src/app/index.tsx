@@ -16,6 +16,7 @@ import { CurrentPolicySection } from "../components/CurrentPolicySection";
 import { GameHeader } from "../components/GameHeader";
 import { GameIntroScreen } from "../components/GameIntroScreen";
 import { GameResultScreen } from "../components/GameResultScreen";
+import { PolicyHistory } from "../components/PolicyHistory";
 import { PolicyResultBanner } from "../components/PolicyResultBanner";
 import { StageProgress } from "../components/StageProgress";
 
@@ -45,7 +46,6 @@ export default function HomeScreen() {
   const hasExistingProgress =
     gameState.history.length > 0 || gameState.city.year > 1;
 
-  // 創生期の最初の成長モデルを選択済みか
   const hasChosenDevelopmentModel =
     gameState.completedStageStrategies.includes("creation");
 
@@ -225,6 +225,8 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           )}
+
+          <PolicyHistory history={gameState.history} />
 
           <View style={styles.footer}>
             <Text style={styles.footerTitle}>まちのかけひき</Text>
