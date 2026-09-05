@@ -3,11 +3,10 @@
 -- 匿名プレイデータ収集用スキーマ
 -- ==================================================
 
--- UUID生成機能
 create extension if not exists pgcrypto;
 
 -- ==================================================
--- プレイセッション
+-- ゲームセッション
 -- 1回のニューゲームにつき1行
 -- ==================================================
 
@@ -18,19 +17,15 @@ create table if not exists public.game_sessions (
     not null
     default now(),
 
-  -- 同意文のバージョン
   consent_version text
     not null,
 
-  -- データ形式のバージョン
   schema_version integer
     not null
     default 1,
 
-  -- アプリのバージョン
   app_version text,
 
-  -- ios / android / web
   platform text
     check (
       platform in (
@@ -41,11 +36,8 @@ create table if not exists public.game_sessions (
       )
     ),
 
-  -- ja-JPなど。正確な位置情報は保存しない
   locale text,
 
-  -- 研究利用への同意は、
-  -- ゲーム改善への同意と分けて保存する
   analytics_consent boolean
     not null
     default true,
@@ -56,14 +48,17 @@ create table if not exists public.game_sessions (
 );
 
 comment on table public.game_sessions is
-  '個人を特定しない1ゲーム単位のセッション';
+  '個人を特定しないゲーム単位の匿名セッション';
+
+comment on column public.game_sessions.analytics_consent is
+  'ゲーム改善を目的とした分析への同意';
 
 comment on column public.game_sessions.research_consent is
-  '研究利用について別途説明・同意を取得した場合のみtrue';
+  '研究利用について別途同意を取得した場合のみtrue';
 
 -- ==================================================
 -- ゲームイベント
--- 政策選択やゲーム終了を時系列で保存
+-- 政策提示、選択、発展段階変更、ゲーム終了を保存
 -- ==================================================
 
 create table if not exists public.game_events (
@@ -78,11 +73,11 @@ create table if not exists public.game_events (
     not null
     default now(),
 
-  -- セッション内の送信順
-  -- 通信失敗後の再送でも重複しないようにする
   event_sequence integer
     not null
-    check (event_sequence >= 0),
+    check (
+      event_sequence >= 0
+    ),
 
   event_type text
     not null
@@ -96,7 +91,6 @@ create table if not exists public.game_events (
       )
     ),
 
-  -- 1〜50年目
   year integer
     check (
       year between 1 and 50
@@ -124,8 +118,8 @@ create table if not exists public.game_events (
       )
     ),
 
-  -- 出題・実行した政策
   policy_id text,
+
   policy_title text,
 
   policy_type text
@@ -158,7 +152,6 @@ create table if not exists public.game_events (
       )
     ),
 
-  -- strategy / numeric
   decision_kind text
     check (
       decision_kind in (
@@ -167,15 +160,14 @@ create table if not exists public.game_events (
       )
     ),
 
-  -- 戦略選択時に保存
   option_id text,
+
   option_label text,
 
-  -- 数値選択時に保存
   numeric_value numeric,
+
   numeric_unit text,
 
-  -- 選択前後の成長モデル
   development_model_before text
     check (
       development_model_before in (
@@ -194,27 +186,20 @@ create table if not exists public.game_events (
       )
     ),
 
-  -- 戦略を実際に乗り換えたか
   strategy_switched boolean
     not null
     default false,
 
-  -- 選択直前の街の状態
   city_before jsonb,
 
-  -- 選択反映後の街の状態
   city_after jsonb,
 
-  -- 政策による変化量
   effects jsonb,
 
-  -- ゲーム終了時の評価
   final_scores jsonb,
 
-  -- クライアント側で記録した時刻
   client_created_at timestamptz,
 
-  -- アプリバージョン
   app_version text,
 
   unique (
@@ -222,8 +207,6 @@ create table if not exists public.game_events (
     event_sequence
   ),
 
-  -- 戦略選択ならoption_id、
-  -- 数値選択ならnumeric_valueを必要とする
   constraint valid_decision_data check (
     event_type <> 'decision_made'
     or (
@@ -240,13 +223,16 @@ create table if not exists public.game_events (
 );
 
 comment on table public.game_events is
-  '政策の出題、戦略選択、数値設定、発展段階変更、ゲーム終了を保存する追記専用ログ';
+  '政策提示、戦略選択、数値設定、発展段階変更、ゲーム終了を保存する追記専用ログ';
 
 comment on column public.game_events.city_before is
-  '政策選択直前の人口・財政・評価指標';
+  '政策選択前の人口、財政、評価指標などの街の状態';
 
 comment on column public.game_events.city_after is
-  '政策効果反映後の人口・財政・評価末数値';
+  '政策効果反映後の人口、財政、評価指標などの街の状態';
+
+comment on column public.game_events.effects is
+  '政策によって発生した各指標の変化量';
 
 -- ==================================================
 -- 集計を高速化するインデックス
@@ -296,7 +282,7 @@ on public.game_events (
 
 -- ==================================================
 -- Row Level Security
--- アプリからは追加だけ許可する
+-- アプリからは追加だけを許可する
 -- 読み取り・更新・削除は許可しない
 -- ==================================================
 
@@ -306,7 +292,6 @@ alter table public.game_sessions
 alter table public.game_events
   enable row level security;
 
--- 以前同名のポリシーを作った場合に備えて削除
 drop policy if exists
   "allow anonymous session inserts"
 on public.game_sessions;
@@ -315,7 +300,14 @@ drop policy if exists
   "allow anonymous event inserts"
 on public.game_events;
 
--- 匿名利用者は同意済みセッションだけ追加できる
+drop policy if exists
+  "allow authenticated session inserts"
+on public.game_sessions;
+
+drop policy if exists
+  "allow authenticated event inserts"
+on public.game_events;
+
 create policy
   "allow anonymous session inserts"
 on public.game_sessions
@@ -325,7 +317,6 @@ with check (
   analytics_consent = true
 );
 
--- 匿名利用者はイベントを追記できる
 create policy
   "allow anonymous event inserts"
 on public.game_events
@@ -335,7 +326,29 @@ with check (
   session_id is not null
 );
 
--- 権限を一度取り消し、INSERTだけ付与する
+create policy
+  "allow authenticated session inserts"
+on public.game_sessions
+for insert
+to authenticated
+with check (
+  analytics_consent = true
+);
+
+create policy
+  "allow authenticated event inserts"
+on public.game_events
+for insert
+to authenticated
+with check (
+  session_id is not null
+);
+
+-- ==================================================
+-- アプリ用権限
+-- INSERTだけを許可
+-- ==================================================
+
 revoke all
 on table public.game_sessions
 from anon;
@@ -344,16 +357,6 @@ revoke all
 on table public.game_events
 from anon;
 
-grant insert
-on table public.game_sessions
-to anon;
-
-grant insert
-on table public.game_events
-to anon;
-
--- 認証済みユーザーを将来使う場合も、
--- 現時点ではアプリから読み取れないようにする
 revoke all
 on table public.game_sessions
 from authenticated;
@@ -361,6 +364,14 @@ from authenticated;
 revoke all
 on table public.game_events
 from authenticated;
+
+grant insert
+on table public.game_sessions
+to anon;
+
+grant insert
+on table public.game_events
+to anon;
 
 grant insert
 on table public.game_sessions

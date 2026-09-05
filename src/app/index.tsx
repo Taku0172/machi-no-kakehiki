@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,6 +10,18 @@ import {
   View,
 } from "react-native";
 
+import {
+  loadAnalyticsConsent,
+  saveAnalyticsConsent,
+} from "../analytics/analyticsConsent";
+
+import { clearAnalyticsSession } from "../analytics/gameAnalytics";
+
+import type { AnalyticsConsentChoice } from "../analytics/analyticsConsent";
+import type { CityState } from "../types/game";
+
+import { AnalyticsConsentScreen } from "../components/AnalyticsConsentScreen";
+import { AnalyticsSettingsModal } from "../components/AnalyticsSettingsModal";
 import { CityMetricsGrid } from "../components/CityMetricsGrid";
 import { CityScoreBar } from "../components/CityScoreBar";
 import { CurrentPolicySection } from "../components/CurrentPolicySection";
@@ -22,10 +34,19 @@ import { StageProgress } from "../components/StageProgress";
 
 import { useGame } from "../hooks/useGame";
 
-import type { CityState } from "../types/game";
-
 export default function HomeScreen() {
   const [hasEnteredGame, setHasEnteredGame] = useState(false);
+
+  const [analyticsConsent, setAnalyticsConsent] =
+    useState<AnalyticsConsentChoice | null>(null);
+
+  const [isConsentLoading, setIsConsentLoading] = useState(true);
+
+  const [isAnalyticsSettingsVisible, setIsAnalyticsSettingsVisible] =
+    useState(false);
+
+  const [isAnalyticsConsentUpdating, setIsAnalyticsConsentUpdating] =
+    useState(false);
 
   const {
     gameState,
@@ -42,6 +63,25 @@ export default function HomeScreen() {
     submitNumericValue,
     startNewGame,
   } = useGame();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function restoreAnalyticsConsent() {
+      const storedConsent = await loadAnalyticsConsent();
+
+      if (isMounted) {
+        setAnalyticsConsent(storedConsent);
+        setIsConsentLoading(false);
+      }
+    }
+
+    void restoreAnalyticsConsent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const hasExistingProgress =
     gameState.history.length > 0 || gameState.city.year > 1;
@@ -64,38 +104,66 @@ export default function HomeScreen() {
 
     return {
       year: previousTimelinePoint.year,
-
       stage: city.stage,
-
       population: previousTimelinePoint.population,
-
       budget: previousTimelinePoint.budget,
-
       economy: previousTimelinePoint.economy,
-
       infrastructure: previousTimelinePoint.infrastructure,
-
       happiness: previousTimelinePoint.happiness,
-
       trust: previousTimelinePoint.trust,
-
       congestion: previousTimelinePoint.congestion,
-
       environment: previousTimelinePoint.environment,
     };
   }, [previousTimelinePoint, city.stage]);
 
+  async function handleInitialAnalyticsChoice(choice: AnalyticsConsentChoice) {
+    try {
+      await saveAnalyticsConsent(choice);
+
+      // 古い分析セッションが残っている場合に備えて、
+      // 最初の選択時にいったん削除する。
+      await clearAnalyticsSession();
+    } catch {
+      // 保存に失敗した場合は、次回起動時に
+      // 同意画面が再表示される。
+    }
+
+    setAnalyticsConsent(choice);
+  }
+
+  async function handleAnalyticsSettingChange(choice: AnalyticsConsentChoice) {
+    if (isAnalyticsConsentUpdating) {
+      return;
+    }
+
+    setIsAnalyticsConsentUpdating(true);
+
+    try {
+      await saveAnalyticsConsent(choice);
+
+      // オフにした場合は送信を停止する。
+      // 再びオンにした場合は、次回の政策選択時に
+      // 新しい匿名セッションを開始する。
+      await clearAnalyticsSession();
+
+      setAnalyticsConsent(choice);
+    } catch (error) {
+      console.warn("分析データの設定を変更できませんでした。", error);
+    } finally {
+      setIsAnalyticsConsentUpdating(false);
+    }
+  }
+
   async function handleRestart() {
     await startNewGame();
-
     setHasEnteredGame(false);
   }
 
   // ==================================================
-  // セーブデータ読み込み中
+  // セーブデータ・同意状態の読み込み中
   // ==================================================
 
-  if (isLoading) {
+  if (isLoading || isConsentLoading) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
         <StatusBar style="light" />
@@ -106,6 +174,23 @@ export default function HomeScreen() {
 
         <Text style={styles.loadingText}>保存された市政データを確認中です</Text>
       </SafeAreaView>
+    );
+  }
+
+  // ==================================================
+  // 分析データ収集への同意画面
+  // ==================================================
+
+  if (analyticsConsent === null) {
+    return (
+      <AnalyticsConsentScreen
+        onAccept={() => {
+          void handleInitialAnalyticsChoice("accepted");
+        }}
+        onDecline={() => {
+          void handleInitialAnalyticsChoice("declined");
+        }}
+      />
     );
   }
 
@@ -128,7 +213,7 @@ export default function HomeScreen() {
   }
 
   // ==================================================
-  // 50年終了後
+  // 50年終了後の結果画面
   // ==================================================
 
   if (gameState.isFinished || gameState.phase === "finished") {
@@ -137,12 +222,36 @@ export default function HomeScreen() {
         <StatusBar style="light" />
 
         <View style={styles.resultHeader}>
-          <Text style={styles.resultAppName}>まちのかけひき</Text>
+          <View>
+            <Text style={styles.resultAppName}>まちのかけひき</Text>
 
-          <Text style={styles.resultHeaderText}>市政結果</Text>
+            <Text style={styles.resultHeaderText}>市政結果</Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="データ設定を開く"
+            onPress={() => setIsAnalyticsSettingsVisible(true)}
+            style={({ pressed }) => [
+              styles.headerSettingsButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <Text style={styles.headerSettingsButtonText}>データ設定</Text>
+          </Pressable>
         </View>
 
         <GameResultScreen gameState={gameState} onRestart={handleRestart} />
+
+        <AnalyticsSettingsModal
+          visible={isAnalyticsSettingsVisible}
+          consent={analyticsConsent}
+          isUpdating={isAnalyticsConsentUpdating}
+          onChangeConsent={(choice) => {
+            void handleAnalyticsSettingChange(choice);
+          }}
+          onClose={() => setIsAnalyticsSettingsVisible(false)}
+        />
       </SafeAreaView>
     );
   }
@@ -232,7 +341,7 @@ export default function HomeScreen() {
             <Text style={styles.footerTitle}>まちのかけひき</Text>
 
             <Text style={styles.footerText}>
-              政策の正解は一つではありません。
+              政策に正解は一つではありません。
               誰が利益を得て、誰が費用を負担するのかを考えながら、
               50年間の市政を進めてください。
             </Text>
@@ -253,9 +362,33 @@ export default function HomeScreen() {
                   : "ゲームは自動保存されています"}
               </Text>
             </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="データ設定を開く"
+              onPress={() => setIsAnalyticsSettingsVisible(true)}
+              style={({ pressed }) => [
+                styles.dataSettingsButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.dataSettingsButtonText}>
+                プレイデータの設定
+              </Text>
+            </Pressable>
           </View>
         </View>
       </ScrollView>
+
+      <AnalyticsSettingsModal
+        visible={isAnalyticsSettingsVisible}
+        consent={analyticsConsent}
+        isUpdating={isAnalyticsConsentUpdating}
+        onChangeConsent={(choice) => {
+          void handleAnalyticsSettingChange(choice);
+        }}
+        onClose={() => setIsAnalyticsSettingsVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -322,7 +455,23 @@ const styles = StyleSheet.create({
   },
 
   resultHeaderText: {
+    marginTop: 2,
     color: "#D99A37",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  headerSettingsButton: {
+    minHeight: 38,
+    paddingHorizontal: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#557084",
+  },
+
+  headerSettingsButtonText: {
+    color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -432,5 +581,20 @@ const styles = StyleSheet.create({
   saveStatusText: {
     color: "#8FA9B9",
     fontSize: 9,
+  },
+
+  dataSettingsButton: {
+    minHeight: 42,
+    marginTop: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#557084",
+  },
+
+  dataSettingsButtonText: {
+    color: "#C5D5DE",
+    fontSize: 11,
+    fontWeight: "700",
   },
 });
