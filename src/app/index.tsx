@@ -1,399 +1,396 @@
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useMemo } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { CityMetricsGrid } from "../components/CityMetricsGrid";
+import { CityScoreBar } from "../components/CityScoreBar";
+import { CurrentPolicySection } from "../components/CurrentPolicySection";
+import { GameHeader } from "../components/GameHeader";
+import { GameResultScreen } from "../components/GameResultScreen";
+import { PolicyResultBanner } from "../components/PolicyResultBanner";
+import { StageProgress } from "../components/StageProgress";
 
-import { NumericPolicyCard } from "../components/NumericPolicyCard";
-import { PolicyCard } from "../components/PolicyCard";
-import { initialCityState } from "../data/initialCityState";
-import { firstPolicy, regularPolicies } from "../data/policies";
-import { applyPolicyEffects } from "../utils/applyPolicyEffects";
+import { useGame } from "../hooks/useGame";
 
-// 発展段階の日本語名
-const stageNames = {
-  creation: "創生期",
-  growth: "成長期",
-  expansion: "拡大期",
-  maturity: "成熟期",
-  reorganization: "再編期",
-};
-
-// 現在のゲーム進行
-type GamePhase = "cityStrategy" | "regularPolicy";
+import type { CityState } from "../types/game";
 
 export default function HomeScreen() {
-  // 現在の街の状態
-  const [city, setCity] = useState(initialCityState);
+  const {
+    gameState,
+    city,
+    scores,
+    currentPolicy,
+    lastResult,
 
-  // 最初は都市戦略から始める
-  const [phase, setPhase] = useState<GamePhase>("cityStrategy");
+    isLoading,
+    isSaving,
+    saveError,
 
-  // 現在表示している通常政策の番号
-  const [currentPolicyIndex, setCurrentPolicyIndex] = useState(0);
+    selectStrategyOption,
+    submitNumericValue,
+    startNewGame,
+  } = useGame();
 
-  // 戦略型政策で選択している選択肢
-  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
-
-  // 数値型政策で選択している値
-  const [numericValue, setNumericValue] = useState(() => {
-    const firstRegularPolicy = regularPolicies[0];
-
-    if (firstRegularPolicy.type === "numeric") {
-      return firstRegularPolicy.defaultValue;
+  // 直前の通常政策実行前の状態
+  // 数値カードと評価バーの増減表示に使う
+  const previousTimelinePoint = useMemo(() => {
+    if (gameState.timeline.length < 2) {
+      return null;
     }
 
-    return 0;
-  });
+    return gameState.timeline[gameState.timeline.length - 2];
+  }, [gameState.timeline]);
 
-  // 直前の政策結果
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
-
-  // 現在表示する通常政策
-  const currentPolicy =
-    regularPolicies[currentPolicyIndex % regularPolicies.length];
-
-  // 発展段階の都市戦略を実行する
-  function executeCityStrategy() {
-    const selectedOption = firstPolicy.options.find(
-      (option) => option.id === selectedOptionId,
-    );
-
-    if (!selectedOption) {
-      return;
+  const previousCity: CityState | null = useMemo(() => {
+    if (!previousTimelinePoint) {
+      return null;
     }
 
-    // 都市戦略なので年度は進めない
-    setCity((currentCity) =>
-      applyPolicyEffects(currentCity, selectedOption.effects, false),
+    return {
+      year: previousTimelinePoint.year,
+
+      stage: city.stage,
+
+      population: previousTimelinePoint.population,
+
+      budget: previousTimelinePoint.budget,
+
+      economy: previousTimelinePoint.economy,
+
+      infrastructure: previousTimelinePoint.infrastructure,
+
+      happiness: previousTimelinePoint.happiness,
+
+      trust: previousTimelinePoint.trust,
+
+      congestion: previousTimelinePoint.congestion,
+
+      environment: previousTimelinePoint.environment,
+    };
+  }, [previousTimelinePoint, city.stage]);
+
+  // ==================================================
+  // セーブデータ読み込み中
+  // ==================================================
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingScreen}>
+        <StatusBar style="light" />
+
+        <ActivityIndicator size="large" color="#D99A37" />
+
+        <Text style={styles.loadingTitle}>街を読み込んでいます</Text>
+
+        <Text style={styles.loadingText}>保存された市政データを確認中です</Text>
+      </SafeAreaView>
     );
-
-    setResultMessage(
-      `「${selectedOption.label}」を都市の長期方針に決定しました。同じ1年目の通常政策へ進みます。`,
-    );
-
-    // 選択状態をリセットする
-    setSelectedOptionId(null);
-
-    // 通常政策へ移動する
-    setPhase("regularPolicy");
   }
 
-  // 戦略選択型の通常政策を実行する
-  function executeRegularStrategy() {
-    if (currentPolicy.type !== "strategy") {
-      return;
-    }
+  // ==================================================
+  // 50年終了後
+  // ==================================================
 
-    const selectedOption = currentPolicy.options.find(
-      (option) => option.id === selectedOptionId,
+  if (gameState.isFinished || gameState.phase === "finished") {
+    return (
+      <SafeAreaView style={styles.resultScreen}>
+        <StatusBar style="light" />
+
+        <View style={styles.resultHeader}>
+          <Text style={styles.resultAppName}>まちのかけひき</Text>
+
+          <Text style={styles.resultHeaderText}>市政結果</Text>
+        </View>
+
+        <GameResultScreen gameState={gameState} onRestart={startNewGame} />
+      </SafeAreaView>
     );
-
-    if (!selectedOption) {
-      return;
-    }
-
-    // 通常政策なので年度を進める
-    setCity((currentCity) =>
-      applyPolicyEffects(currentCity, selectedOption.effects, true),
-    );
-
-    setResultMessage(
-      `「${selectedOption.label}」を実行しました。街の状態に政策効果が反映されました。`,
-    );
-
-    moveToNextPolicy();
   }
 
-  // 数値選択型の通常政策を実行する
-  function executeNumericPolicy() {
-    if (currentPolicy.type !== "numeric") {
-      return;
-    }
-
-    // 選択した数値から結果を計算する
-    const result = currentPolicy.calculateResult(numericValue, city);
-
-    // 通常政策なので年度を進める
-    setCity((currentCity) =>
-      applyPolicyEffects(currentCity, result.effects, true),
-    );
-
-    setResultMessage(result.message);
-
-    moveToNextPolicy();
-  }
-
-  // 次の通常政策へ移動する
-  function moveToNextPolicy() {
-    const nextPolicyIndex = (currentPolicyIndex + 1) % regularPolicies.length;
-
-    const nextPolicy = regularPolicies[nextPolicyIndex];
-
-    // 次の政策番号を保存する
-    setCurrentPolicyIndex(nextPolicyIndex);
-
-    // 前の戦略選択を解除する
-    setSelectedOptionId(null);
-
-    // 次が数値政策なら初期値を設定する
-    if (nextPolicy.type === "numeric") {
-      setNumericValue(nextPolicy.defaultValue);
-    }
-  }
+  // ==================================================
+  // 通常のゲーム画面
+  // ==================================================
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
 
-      {/* タイトルと現在の年度 */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.appName}>まちのかけひき</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <GameHeader
+          city={city}
+          developmentModel={gameState.developmentModel}
+          isSaving={isSaving}
+        />
 
-          <Text style={styles.subtitle}>政策選択型まちづくりゲーム</Text>
-        </View>
+        <CityScoreBar
+          scores={scores}
+          previousScores={previousTimelinePoint?.scores ?? null}
+        />
 
-        <View style={styles.yearArea}>
-          <Text style={styles.yearLabel}>市政</Text>
+        {saveError && (
+          <View style={styles.saveErrorBox}>
+            <Text style={styles.saveErrorTitle}>保存できませんでした</Text>
 
-          <Text style={styles.year}>{city.year}年目</Text>
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* 現在の発展段階 */}
-        <View style={styles.stageCard}>
-          <Text style={styles.sectionLabel}>CITY STAGE</Text>
-
-          <Text style={styles.stageName}>{stageNames[city.stage]}</Text>
-
-          <Text style={styles.stageDescription}>
-            街を動かす財源と合意をつくる段階
-          </Text>
-        </View>
-
-        {/* 街の状態 */}
-        <Text style={styles.heading}>街の状態</Text>
-
-        <View style={styles.metrics}>
-          <MetricCard
-            label="人口"
-            value={city.population.toLocaleString()}
-            unit="人"
-          />
-
-          <MetricCard label="財政" value={city.budget} unit="億円" />
-
-          <MetricCard label="経済" value={city.economy} unit="pt" />
-
-          <MetricCard label="都市基盤" value={city.infrastructure} unit="pt" />
-
-          <MetricCard label="満足度" value={city.happiness} unit="pt" />
-
-          <MetricCard label="信頼" value={city.trust} unit="pt" />
-        </View>
-
-        {/* 発展段階の都市戦略 */}
-        {phase === "cityStrategy" && (
-          <PolicyCard
-            category="都市戦略"
-            policy={firstPolicy}
-            selectedOptionId={selectedOptionId}
-            onSelectOption={setSelectedOptionId}
-            onExecute={executeCityStrategy}
-          />
-        )}
-
-        {/* 通常の数値政策 */}
-        {phase === "regularPolicy" && currentPolicy.type === "numeric" && (
-          <NumericPolicyCard
-            policy={currentPolicy}
-            city={city}
-            value={numericValue}
-            onChangeValue={setNumericValue}
-            onExecute={executeNumericPolicy}
-          />
-        )}
-
-        {/* 通常の戦略選択政策 */}
-        {phase === "regularPolicy" && currentPolicy.type === "strategy" && (
-          <PolicyCard
-            category="政策戦略"
-            policy={currentPolicy}
-            selectedOptionId={selectedOptionId}
-            onSelectOption={setSelectedOptionId}
-            onExecute={executeRegularStrategy}
-          />
-        )}
-
-        {/* 直前の政策結果 */}
-        {resultMessage && (
-          <View style={styles.resultBox}>
-            <Text style={styles.resultLabel}>直前の政策結果</Text>
-
-            <Text style={styles.resultText}>{resultMessage}</Text>
+            <Text style={styles.saveErrorText}>{saveError}</Text>
           </View>
         )}
+
+        <StageProgress currentStage={city.stage} />
+
+        <View style={styles.mainContent}>
+          <CityMetricsGrid city={city} previousCity={previousCity} />
+
+          {lastResult && (
+            <View style={styles.sectionSpacing}>
+              <PolicyResultBanner result={lastResult} />
+            </View>
+          )}
+
+          {currentPolicy ? (
+            <View style={styles.sectionSpacing}>
+              <CurrentPolicySection
+                policy={currentPolicy}
+                city={city}
+                phase={gameState.phase}
+                onExecuteStrategy={selectStrategyOption}
+                onExecuteNumeric={submitNumericValue}
+              />
+            </View>
+          ) : (
+            <View style={styles.noPolicyBox}>
+              <Text style={styles.noPolicyTitle}>
+                次の政策を読み込めませんでした
+              </Text>
+
+              <Text style={styles.noPolicyText}>
+                保存データと政策カタログの状態が一致していない可能性があります。
+              </Text>
+
+              <Pressable
+                onPress={() => {
+                  void startNewGame();
+                }}
+                style={({ pressed }) => [
+                  styles.newGameButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.newGameButtonText}>最初からやり直す</Text>
+              </Pressable>
+            </View>
+          )}
+
+          <View style={styles.footer}>
+            <Text style={styles.footerTitle}>まちのかけひき</Text>
+
+            <Text style={styles.footerText}>
+              政策の正解は一つではありません。
+              誰が利益を得て、誰が費用を負担するのかを考えながら、
+              50年間の市政を進めてください。
+            </Text>
+
+            <View style={styles.saveStatus}>
+              <View
+                style={[
+                  styles.saveDot,
+                  {
+                    backgroundColor: isSaving ? "#D99A37" : "#2D755E",
+                  },
+                ]}
+              />
+
+              <Text style={styles.saveStatusText}>
+                {isSaving
+                  ? "ゲームを保存しています"
+                  : "ゲームは自動保存されています"}
+              </Text>
+            </View>
+          </View>
+        </View>
       </ScrollView>
-    </View>
-  );
-}
-
-// 数値カードが受け取るデータ
-type MetricCardProps = {
-  label: string;
-  value: number | string;
-  unit: string;
-};
-
-// 街の数値を表示する共通部品
-function MetricCard({ label, value, unit }: MetricCardProps) {
-  return (
-    <View style={styles.metricCard}>
-      <Text style={styles.metricLabel}>{label}</Text>
-
-      <Text style={styles.metricValue}>
-        {value}
-
-        <Text style={styles.metricUnit}> {unit}</Text>
-      </Text>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: "#0D2538",
+  },
+
+  scrollView: {
+    flex: 1,
     backgroundColor: "#E8DFCC",
   },
 
-  header: {
-    paddingTop: 58,
-    paddingHorizontal: 20,
-    paddingBottom: 18,
+  scrollContent: {
+    paddingBottom: 0,
+  },
+
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: "#0D2538",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+
+  loadingTitle: {
+    marginTop: 18,
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  loadingText: {
+    marginTop: 6,
+    color: "#A9C1CF",
+    fontSize: 11,
+  },
+
+  resultScreen: {
+    flex: 1,
+    backgroundColor: "#0D2538",
+  },
+
+  resultHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: "#0D2538",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
 
-  appName: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-
-  subtitle: {
-    marginTop: 2,
-    color: "#A9C1CF",
-    fontSize: 11,
-  },
-
-  yearArea: {
-    alignItems: "flex-end",
-  },
-
-  yearLabel: {
-    color: "#9AB4C4",
-    fontSize: 11,
-  },
-
-  year: {
+  resultAppName: {
     color: "#FFFFFF",
     fontSize: 17,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
-  content: {
-    padding: 14,
-    paddingBottom: 50,
-  },
-
-  stageCard: {
-    padding: 20,
-    backgroundColor: "#FFFDF7",
-    borderTopWidth: 5,
-    borderTopColor: "#D99A37",
-  },
-
-  sectionLabel: {
-    color: "#C95D36",
+  resultHeaderText: {
+    color: "#D99A37",
     fontSize: 11,
-    fontWeight: "bold",
-    letterSpacing: 2,
+    fontWeight: "700",
   },
 
-  stageName: {
-    marginTop: 8,
-    color: "#142436",
-    fontSize: 28,
-    fontWeight: "bold",
-  },
-
-  stageDescription: {
-    marginTop: 5,
-    color: "#65717D",
-    fontSize: 14,
-  },
-
-  heading: {
-    marginTop: 22,
-    marginBottom: 10,
-    color: "#142436",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  metrics: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-
-  metricCard: {
-    width: "48%",
-    padding: 15,
-    backgroundColor: "#FFFDF7",
-    borderBottomWidth: 4,
-    borderBottomColor: "#347F9E",
-  },
-
-  metricLabel: {
-    color: "#65717D",
-    fontSize: 13,
-  },
-
-  metricValue: {
-    marginTop: 4,
-    color: "#142436",
-    fontSize: 23,
-    fontWeight: "bold",
-  },
-
-  metricUnit: {
-    color: "#65717D",
-    fontSize: 11,
-    fontWeight: "normal",
-  },
-
-  resultBox: {
+  saveErrorBox: {
+    marginHorizontal: 14,
     marginTop: 12,
-    padding: 15,
-    backgroundColor: "#E4EEE9",
+    padding: 12,
+    backgroundColor: "#FFF0EC",
     borderLeftWidth: 4,
-    borderLeftColor: "#2D755E",
+    borderLeftColor: "#C95D36",
   },
 
-  resultLabel: {
-    color: "#2D755E",
+  saveErrorTitle: {
+    color: "#A84628",
     fontSize: 12,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
-  resultText: {
-    marginTop: 4,
+  saveErrorText: {
+    marginTop: 3,
+    color: "#765449",
+    fontSize: 10,
+    lineHeight: 15,
+  },
+
+  mainContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 35,
+  },
+
+  sectionSpacing: {
+    marginTop: 14,
+  },
+
+  noPolicyBox: {
+    marginTop: 14,
+    padding: 17,
+    backgroundColor: "#FFFDF7",
+    borderTopWidth: 4,
+    borderTopColor: "#C95D36",
+  },
+
+  noPolicyTitle: {
     color: "#142436",
-    fontSize: 15,
-    lineHeight: 23,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  noPolicyText: {
+    marginTop: 7,
+    color: "#64717A",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  newGameButton: {
+    minHeight: 48,
+    marginTop: 14,
+    backgroundColor: "#C95D36",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  newGameButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  buttonPressed: {
+    opacity: 0.75,
+  },
+
+  footer: {
+    marginTop: 18,
+    padding: 17,
+    backgroundColor: "#142D41",
+  },
+
+  footerTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  footerText: {
+    marginTop: 6,
+    color: "#A9C1CF",
+    fontSize: 10,
+    lineHeight: 16,
+  },
+
+  saveStatus: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  saveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+
+  saveStatusText: {
+    color: "#8FA9B9",
+    fontSize: 9,
   },
 });
