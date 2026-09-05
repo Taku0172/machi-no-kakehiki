@@ -1,137 +1,214 @@
-// Reactの状態管理機能を読み込む
+// Reactの状態管理機能
 import { useState } from "react";
 
-// React Nativeで使用する画面部品を読み込む
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+// Expoのステータスバー
+import { StatusBar } from "expo-status-bar";
+
+// React Nativeの画面部品
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+
+// ゲーム開始時の街データ
+import { initialCityState } from "../data/initialCityState";
+
+// 発展段階の英語データを日本語表示へ変換
+const stageNames = {
+  creation: "創生期",
+  growth: "成長期",
+  expansion: "拡大期",
+  maturity: "成熟期",
+  reorganization: "再編期",
+};
 
 export default function HomeScreen() {
-  // ゲームを開始したかどうかを記録する
-  const [isStarted, setIsStarted] = useState(false);
+  // 現在の街の状態をReactで管理する
+  const [city] = useState(initialCityState);
 
-  // スタートボタンを押した後の画面
-  if (isStarted) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.gameHeader}>
-          <Text style={styles.smallText}>市政</Text>
-          <Text style={styles.year}>1年目</Text>
+  return (
+    <View style={styles.screen}>
+      <StatusBar style="light" />
+
+      {/* 上部のタイトルと年度 */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.appName}>まちのかけひき</Text>
+          <Text style={styles.subtitle}>政策選択型まちづくりゲーム</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.smallText}>創生期の都市戦略</Text>
-          <Text style={styles.cardTitle}>発展費用を誰が負担するか</Text>
-          <Text style={styles.description}>
-            道路・上下水道・学校を整えるため、 誰を中心に合意を作るか決めます。
+        <View style={styles.yearArea}>
+          <Text style={styles.yearLabel}>市政</Text>
+          <Text style={styles.year}>{city.year}年目</Text>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* 現在の発展段階 */}
+        <View style={styles.stageCard}>
+          <Text style={styles.sectionLabel}>CITY STAGE</Text>
+          <Text style={styles.stageName}>{stageNames[city.stage]}</Text>
+          <Text style={styles.stageDescription}>
+            街を動かす財源と合意をつくる段階
           </Text>
         </View>
-      </SafeAreaView>
-    );
-  }
 
-  // アプリを開いた直後の画面
+        {/* 街の数値 */}
+        <Text style={styles.heading}>街の状態</Text>
+
+        <View style={styles.metrics}>
+          <MetricCard
+            label="人口"
+            value={city.population.toLocaleString()}
+            unit="人"
+          />
+
+          <MetricCard label="財政" value={city.budget} unit="億円" />
+
+          <MetricCard label="経済" value={city.economy} unit="pt" />
+
+          <MetricCard label="都市基盤" value={city.infrastructure} unit="pt" />
+
+          <MetricCard label="満足度" value={city.happiness} unit="pt" />
+
+          <MetricCard label="信頼" value={city.trust} unit="pt" />
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// 数値カードが受け取るデータの型
+type MetricCardProps = {
+  label: string;
+  value: number | string;
+  unit: string;
+};
+
+// 同じ形の数値カードを繰り返し表示する部品
+function MetricCard({ label, value, unit }: MetricCardProps) {
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.startArea}>
-        <Text style={styles.logo}>市</Text>
-        <Text style={styles.title}>まちのかけひき</Text>
+    <View style={styles.metricCard}>
+      <Text style={styles.metricLabel}>{label}</Text>
 
-        <Text style={styles.description}>
-          政策と交渉によって街の50年間をつくる まちづくりゲーム
-        </Text>
-
-        <Pressable
-          style={styles.startButton}
-          onPress={() => setIsStarted(true)}
-        >
-          <Text style={styles.startButtonText}>市政を始める</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+      <Text style={styles.metricValue}>
+        {value}
+        <Text style={styles.metricUnit}> {unit}</Text>
+      </Text>
+    </View>
   );
 }
 
 // 画面のデザイン
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: "#E8DFCC",
   },
 
-  startArea: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 28,
-  },
-
-  logo: {
-    width: 56,
-    height: 56,
-    marginBottom: 20,
-    color: "#0D2538",
-    backgroundColor: "#D99A37",
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    lineHeight: 56,
-    borderRadius: 12,
-  },
-
-  title: {
-    color: "#142436",
-    fontSize: 32,
-    fontWeight: "bold",
-  },
-
-  description: {
-    marginTop: 14,
-    color: "#65717D",
-    fontSize: 16,
-    lineHeight: 26,
-  },
-
-  startButton: {
-    marginTop: 36,
-    padding: 18,
+  header: {
+    paddingTop: 58,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
     backgroundColor: "#0D2538",
-    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
-  startButtonText: {
+  appName: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: "bold",
-    textAlign: "center",
   },
 
-  gameHeader: {
-    padding: 24,
-    backgroundColor: "#0D2538",
+  subtitle: {
+    marginTop: 2,
+    color: "#A9C1CF",
+    fontSize: 11,
   },
 
-  smallText: {
-    color: "#65717D",
-    fontSize: 14,
-    fontWeight: "bold",
+  yearArea: {
+    alignItems: "flex-end",
+  },
+
+  yearLabel: {
+    color: "#9AB4C4",
+    fontSize: 11,
   },
 
   year: {
     color: "#FFFFFF",
-    fontSize: 26,
+    fontSize: 17,
     fontWeight: "bold",
   },
 
-  card: {
-    margin: 16,
-    padding: 22,
+  content: {
+    padding: 14,
+    paddingBottom: 40,
+  },
+
+  stageCard: {
+    padding: 20,
     backgroundColor: "#FFFDF7",
     borderTopWidth: 5,
-    borderTopColor: "#C95D36",
+    borderTopColor: "#D99A37",
   },
 
-  cardTitle: {
-    marginTop: 10,
-    color: "#142436",
-    fontSize: 24,
+  sectionLabel: {
+    color: "#C95D36",
+    fontSize: 11,
     fontWeight: "bold",
+    letterSpacing: 2,
+  },
+
+  stageName: {
+    marginTop: 8,
+    color: "#142436",
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+
+  stageDescription: {
+    marginTop: 5,
+    color: "#65717D",
+    fontSize: 14,
+  },
+
+  heading: {
+    marginTop: 22,
+    marginBottom: 10,
+    color: "#142436",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  metrics: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  metricCard: {
+    width: "48%",
+    padding: 15,
+    backgroundColor: "#FFFDF7",
+    borderBottomWidth: 4,
+    borderBottomColor: "#347F9E",
+  },
+
+  metricLabel: {
+    color: "#65717D",
+    fontSize: 13,
+  },
+
+  metricValue: {
+    marginTop: 4,
+    color: "#142436",
+    fontSize: 23,
+    fontWeight: "bold",
+  },
+
+  metricUnit: {
+    color: "#65717D",
+    fontSize: 11,
+    fontWeight: "normal",
   },
 });
