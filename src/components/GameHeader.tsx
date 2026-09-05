@@ -7,6 +7,10 @@ import type { CityState, DevelopmentModel } from "../types/game";
 type GameHeaderProps = {
   city: CityState;
   developmentModel: DevelopmentModel;
+
+  // 創生期の最初の戦略を選択済みか
+  hasChosenDevelopmentModel?: boolean;
+
   isSaving?: boolean;
 };
 
@@ -20,9 +24,14 @@ const developmentModelNames: Record<DevelopmentModel, string> = {
 export function GameHeader({
   city,
   developmentModel,
+  hasChosenDevelopmentModel = true,
   isSaving = false,
 }: GameHeaderProps) {
   const stage = getStageDefinition(city.stage);
+
+  const modelName = hasChosenDevelopmentModel
+    ? developmentModelNames[developmentModel]
+    : "方針未決定";
 
   return (
     <View style={styles.header}>
@@ -75,12 +84,22 @@ export function GameHeader({
           </View>
         </View>
 
-        <View style={styles.modelBadge}>
+        <View
+          style={[
+            styles.modelBadge,
+            !hasChosenDevelopmentModel && styles.undecidedModelBadge,
+          ]}
+        >
           <View>
             <Text style={styles.badgeLabel}>現在の戦略</Text>
 
-            <Text style={styles.modelValue}>
-              {developmentModelNames[developmentModel]}
+            <Text
+              style={[
+                styles.modelValue,
+                !hasChosenDevelopmentModel && styles.undecidedModelValue,
+              ]}
+            >
+              {modelName}
             </Text>
           </View>
         </View>
@@ -186,6 +205,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  undecidedModelBadge: {
+    borderLeftColor: "#8FA9B9",
+  },
+
   badgeLabel: {
     color: "#8FA9B9",
     fontSize: 9,
@@ -204,5 +227,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
+  },
+
+  undecidedModelValue: {
+    color: "#A9C1CF",
   },
 });
