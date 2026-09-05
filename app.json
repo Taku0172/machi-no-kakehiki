@@ -5,12 +5,12 @@
     "description": "政策と戦略を選びながら、50年間の街の発展を導く政策選択型まちづくりゲーム",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/machi-no-kakehiki-icon.png",
     "scheme": "machinokakehiki",
     "userInterfaceStyle": "light",
     "backgroundColor": "#E8DFCC",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/machi-no-kakehiki-icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.taku.machinokakehiki",
       "buildNumber": "1",
@@ -55,20 +55,14 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0D2538",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 120
+          "image": "./assets/images/machi-no-kakehiki-icon.png",
+          "imageWidth": 180
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "b8cf0413-1520-4c2a-8367-ca15522f96ae"
-      }
     }
   }
 }
