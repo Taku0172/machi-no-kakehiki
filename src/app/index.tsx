@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,7 @@ import { CityMetricsGrid } from "../components/CityMetricsGrid";
 import { CityScoreBar } from "../components/CityScoreBar";
 import { CurrentPolicySection } from "../components/CurrentPolicySection";
 import { GameHeader } from "../components/GameHeader";
+import { GameIntroScreen } from "../components/GameIntroScreen";
 import { GameResultScreen } from "../components/GameResultScreen";
 import { PolicyResultBanner } from "../components/PolicyResultBanner";
 import { StageProgress } from "../components/StageProgress";
@@ -23,6 +24,9 @@ import { useGame } from "../hooks/useGame";
 import type { CityState } from "../types/game";
 
 export default function HomeScreen() {
+  // 起動後、説明画面を通過したか
+  const [hasEnteredGame, setHasEnteredGame] = useState(false);
+
   const {
     gameState,
     city,
@@ -39,8 +43,11 @@ export default function HomeScreen() {
     startNewGame,
   } = useGame();
 
+  // 保存済みのプレイ履歴があるか
+  const hasExistingProgress =
+    gameState.history.length > 0 || gameState.city.year > 1;
+
   // 直前の通常政策実行前の状態
-  // 数値カードと評価バーの増減表示に使う
   const previousTimelinePoint = useMemo(() => {
     if (gameState.timeline.length < 2) {
       return null;
@@ -77,6 +84,14 @@ export default function HomeScreen() {
     };
   }, [previousTimelinePoint, city.stage]);
 
+  // 終了画面から新しいゲームを始める
+  async function handleRestart() {
+    await startNewGame();
+
+    // 新しい街では説明画面へ戻す
+    setHasEnteredGame(false);
+  }
+
   // ==================================================
   // セーブデータ読み込み中
   // ==================================================
@@ -96,6 +111,24 @@ export default function HomeScreen() {
   }
 
   // ==================================================
+  // ゲーム説明画面
+  // ==================================================
+
+  if (!hasEnteredGame) {
+    return (
+      <SafeAreaView style={styles.introScreen}>
+        <StatusBar style="dark" />
+
+        <GameIntroScreen
+          hasExistingProgress={hasExistingProgress}
+          currentYear={city.year}
+          onStart={() => setHasEnteredGame(true)}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ==================================================
   // 50年終了後
   // ==================================================
 
@@ -110,7 +143,7 @@ export default function HomeScreen() {
           <Text style={styles.resultHeaderText}>市政結果</Text>
         </View>
 
-        <GameResultScreen gameState={gameState} onRestart={startNewGame} />
+        <GameResultScreen gameState={gameState} onRestart={handleRestart} />
       </SafeAreaView>
     );
   }
@@ -181,7 +214,7 @@ export default function HomeScreen() {
 
               <Pressable
                 onPress={() => {
-                  void startNewGame();
+                  void handleRestart();
                 }}
                 style={({ pressed }) => [
                   styles.newGameButton,
@@ -229,6 +262,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#0D2538",
+  },
+
+  introScreen: {
+    flex: 1,
+    backgroundColor: "#E8DFCC",
   },
 
   scrollView: {
