@@ -10,6 +10,13 @@ export const cityScoreDefinitions: Record<
     description: string;
   }
 > = {
+  overall: {
+    label: "総合評価",
+    shortLabel: "総合",
+    color: "#142436",
+    description: "6種類の街評価を総合したポイントです。",
+  },
+
   transport: {
     label: "交通評価",
     shortLabel: "交通",
@@ -58,42 +65,49 @@ function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-// 街の基本数値から6種類の評価ポイントを計算する
-export function calculateCityScores(city: CityState): CityScores {
-  // 混雑は低い方が良いため、100から差し引いて評価する
-  const congestionComfort = 100 - city.congestion;
+// 総合評価を計算する
+export function calculateOverallScore(
+  scores: Omit<CityScores, "overall">,
+): number {
+  const total =
+    scores.transport +
+    scores.industry +
+    scores.living +
+    scores.environment +
+    scores.finance +
+    scores.trust;
 
-  const transport = city.infrastructure * 0.65 + congestionComfort * 0.35;
-
-  const industry = city.economy * 0.7 + city.infrastructure * 0.3;
-
-  const living =
-    city.happiness * 0.6 + city.environment * 0.25 + congestionComfort * 0.15;
-
-  const environment = city.environment;
-
-  // 財政はマイナスもあり得るが、評価表示は0〜100にする
-  const finance = city.budget;
-
-  const trust = city.trust;
-
-  return {
-    transport: clampScore(transport),
-    industry: clampScore(industry),
-    living: clampScore(living),
-    environment: clampScore(environment),
-    finance: clampScore(finance),
-    trust: clampScore(trust),
-  };
+  return Math.round(total / 6);
 }
 
-// 6項目の平均から街の総合評価を計算する
-export function calculateOverallScore(scores: CityScores): number {
-  const values = Object.values(scores);
+// 街の基本数値から評価ポイントを計算する
+export function calculateCityScores(city: CityState): CityScores {
+  // 混雑は低い方が良いため、100から差し引く
+  const congestionComfort = 100 - city.congestion;
 
-  const total = values.reduce((sum, value) => sum + value, 0);
+  const baseScores: Omit<CityScores, "overall"> = {
+    transport: clampScore(
+      city.infrastructure * 0.65 + congestionComfort * 0.35,
+    ),
 
-  return Math.round(total / values.length);
+    industry: clampScore(city.economy * 0.7 + city.infrastructure * 0.3),
+
+    living: clampScore(
+      city.happiness * 0.6 + city.environment * 0.25 + congestionComfort * 0.15,
+    ),
+
+    environment: clampScore(city.environment),
+
+    // 財政はマイナスになり得るが、評価表示は0〜100
+    finance: clampScore(city.budget),
+
+    trust: clampScore(city.trust),
+  };
+
+  return {
+    overall: calculateOverallScore(baseScores),
+    ...baseScores,
+  };
 }
 
 // 総合評価をランクへ変換する
@@ -123,6 +137,7 @@ export function calculateScoreChanges(
   previousScores: CityScores,
 ): CityScores {
   return {
+    overall: currentScores.overall - previousScores.overall,
     transport: currentScores.transport - previousScores.transport,
     industry: currentScores.industry - previousScores.industry,
     living: currentScores.living - previousScores.living,
