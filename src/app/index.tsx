@@ -3,10 +3,11 @@ import { useState } from "react";
 
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { NumericPolicyCard } from "../components/NumericPolicyCard";
 import { PolicyCard } from "../components/PolicyCard";
 import { initialCityState } from "../data/initialCityState";
-import { firstPolicy } from "../data/policies";
-import { CityMetric } from "../types/game";
+import { firstPolicy, waterPolicy } from "../data/policies";
+import { applyPolicyEffects } from "../utils/applyPolicyEffects";
 
 // 発展段階の日本語名
 const stageNames = {
@@ -17,18 +18,27 @@ const stageNames = {
   reorganization: "再編期",
 };
 
+// 現在どの政策場面にいるか
+type GamePhase = "cityStrategy" | "regularPolicy" | "completed";
+
 export default function HomeScreen() {
   // 現在の街の状態
   const [city, setCity] = useState(initialCityState);
 
+  // 最初は都市戦略から始める
+  const [phase, setPhase] = useState<GamePhase>("cityStrategy");
+
   // 現在選択している戦略
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+
+  // 水道政策で選択している金額
+  const [numericValue, setNumericValue] = useState(waterPolicy.defaultValue);
 
   // 政策実行後に表示する文章
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
-  // 選択した戦略を実行する
-  function executePolicy() {
+  // 都市戦略を実行する
+  function executeStrategyPolicy() {
     const selectedOption = firstPolicy.options.find(
       (option) => option.id === selectedOptionId,
     );
@@ -38,27 +48,34 @@ export default function HomeScreen() {
       return;
     }
 
-    setCity((currentCity) => {
-      // 現在の街をコピーする
-      const updatedCity = { ...currentCity };
+    // 都市戦略の効果を反映する
+    // 第3引数がfalseなので年度は進まない
+    setCity((currentCity) =>
+      applyPolicyEffects(currentCity, selectedOption.effects, false),
+    );
 
-      // 選択した戦略の効果を順番に反映する
-      Object.entries(selectedOption.effects).forEach(([key, value]) => {
-        const metric = key as CityMetric;
-        const change = value ?? 0;
+    setResultMessage(
+      `「${selectedOption.label}」を実行しました。同じ1年目の通常政策へ進みます。`,
+    );
 
-        updatedCity[metric] += change;
+    // 通常政策の画面へ切り替える
+    setSelectedOptionId(null);
+    setPhase("regularPolicy");
+  }
 
-        // 人口と財政以外は0〜100の範囲に収める
-        if (metric !== "population" && metric !== "budget") {
-          updatedCity[metric] = Math.max(0, Math.min(100, updatedCity[metric]));
-        }
-      });
+  // 数値政策を実行する
+  function executeNumericPolicy() {
+    // 選択した金額と現在の街から結果を計算する
+    const result = waterPolicy.calculateResult(numericValue, city);
 
-      return updatedCity;
-    });
+    // 通常政策の効果を反映する
+    // 第3引数がtrueなので年度が1年進む
+    setCity((currentCity) =>
+      applyPolicyEffects(currentCity, result.effects, true),
+    );
 
-    setResultMessage(`「${selectedOption.label}」を実行しました。`);
+    setResultMessage(result.message);
+    setPhase("completed");
   }
 
   return (
@@ -112,20 +129,41 @@ export default function HomeScreen() {
           <MetricCard label="信頼" value={city.trust} unit="pt" />
         </View>
 
-        {/* 最初の政策課題 */}
-        <PolicyCard
-          policy={firstPolicy}
-          selectedOptionId={selectedOptionId}
-          onSelectOption={setSelectedOptionId}
-          onExecute={executePolicy}
-        />
+        {/* 発展段階の都市戦略 */}
+        {phase === "cityStrategy" && (
+          <PolicyCard
+            policy={firstPolicy}
+            selectedOptionId={selectedOptionId}
+            onSelectOption={setSelectedOptionId}
+            onExecute={executeStrategyPolicy}
+          />
+        )}
+
+        {/* 同じ年度に行う通常政策 */}
+        {phase === "regularPolicy" && (
+          <NumericPolicyCard
+            policy={waterPolicy}
+            city={city}
+            value={numericValue}
+            onChangeValue={setNumericValue}
+            onExecute={executeNumericPolicy}
+          />
+        )}
 
         {/* 政策実行後の結果 */}
         {resultMessage && (
           <View style={styles.resultBox}>
-            <Text style={styles.resultLabel}>政策結果</Text>
+            <Text style={styles.resultLabel}>
+              {phase === "completed" ? "2年目へ進みました" : "都市戦略の結果"}
+            </Text>
 
             <Text style={styles.resultText}>{resultMessage}</Text>
+
+            {phase === "completed" && (
+              <Text style={styles.nextMessage}>
+                次の政策課題は、次の実装で追加します。
+              </Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -286,5 +324,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: "#142436",
     fontSize: 15,
+    lineHeight: 23,
+  },
+
+  nextMessage: {
+    marginTop: 8,
+    color: "#65717D",
+    fontSize: 13,
   },
 });
