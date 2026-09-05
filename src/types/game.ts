@@ -24,3 +24,28 @@ export type CityState = {
   congestion: number;
   environment: number;
 };
+
+// 政策によって変化できる街の指標
+export type CityMetric = Exclude<keyof CityState, "year" | "stage">;
+
+// 戦略を選んだときの効果
+export type PolicyEffects = Partial<Record<CityMetric, number>>;
+
+// プレイヤーが選べる戦略
+export type PolicyOption = {
+  id: string;
+  label: string;
+  description: string;
+  effects: PolicyEffects;
+};
+
+// 戦略選択型の政策課題
+export type StrategyPolicy = {
+  id: string;
+  type: "strategy";
+  title: string;
+  description: string;
+  reason: string;
+  theory: string;
+  options: PolicyOption[];
+};
