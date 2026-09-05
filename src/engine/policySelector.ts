@@ -1,21 +1,44 @@
+import { calculateCityScores } from "./scoreEngine";
+
 import type {
     CityMetric,
     CityScoreKey,
     CityState,
+    DevelopmentModel,
     Policy,
     PolicyCategory,
+    StrategyPolicy,
 } from "../types/game";
-import { calculateCityScores } from "./scoreEngine";
 
-type PolicySelectionOptions = {
+// ==================================================
+// 政策選択に渡す情報
+// ==================================================
+
+export type PolicySelectionOptions = {
   policies: Policy[];
   city: CityState;
   category: PolicyCategory;
+
+  activeDevelopmentModel?: DevelopmentModel | null;
+
   completedPolicyIds?: string[];
   recentPolicyIds?: string[];
+
+  // テスト時に乱数を固定できるようにする
+  random?: () => number;
 };
 
-// 最低値として指定された条件を満たしているか確認する
+export type StrategyReviewTriggerOptions = {
+  city: CityState;
+  lastStrategyReviewYear: number | null;
+  availableReviewCount: number;
+  random?: () => number;
+};
+
+// ==================================================
+// 政策の出現条件
+// ==================================================
+
 function meetsMinimumMetrics(
   city: CityState,
   minimumMetrics: Partial<Record<CityMetric, number>> = {},
@@ -27,7 +50,6 @@ function meetsMinimumMetrics(
   });
 }
 
-// 最高値として指定された条件を超えていないか確認する
 function meetsMaximumMetrics(
   city: CityState,
   maximumMetrics: Partial<Record<CityMetric, number>> = {},
@@ -39,7 +61,7 @@ function meetsMaximumMetrics(
   });
 }
 
-// 現在の街が政策の出現条件を満たしているか確認する
+// 年度、人口、街の数値条件を確認する
 export function meetsPolicyConditions(
   policy: Policy,
   city: CityState,
@@ -89,7 +111,7 @@ export function meetsPolicyConditions(
   return true;
 }
 
-// 政策が現在の発展段階に対応しているか確認する
+// 現在の発展段階に対応しているか確認する
 function matchesDevelopmentStage(policy: Policy, city: CityState): boolean {
   if (!policy.stages || policy.stages.length === 0) {
     return true;
@@ -98,15 +120,32 @@ function matchesDevelopmentStage(policy: Policy, city: CityState): boolean {
   return policy.stages.includes(city.stage);
 }
 
-// 政策カテゴリーが一致しているか確認する
-// categoryがない既存政策は通常政策として扱う
+// 政策カテゴリーを確認する
 function matchesCategory(policy: Policy, category: PolicyCategory): boolean {
   const policyCategory = policy.category ?? "regularPolicy";
 
   return policyCategory === category;
 }
 
-// 直近に出題され、クールダウン期間中か確認する
+// 戦略見直しが現在の成長モデルに対応するか確認する
+function matchesDevelopmentModel(
+  policy: Policy,
+  activeDevelopmentModel: DevelopmentModel | null | undefined,
+): boolean {
+  if (policy.category !== "strategyReview") {
+    return true;
+  }
+
+  if (!activeDevelopmentModel) {
+    return false;
+  }
+
+  const requiredTag = `current-${activeDevelopmentModel}`;
+
+  return policy.tags?.includes(requiredTag) ?? false;
+}
+
+// クールダウン期間中か確認する
 function isPolicyCoolingDown(
   policy: Policy,
   recentPolicyIds: string[],
@@ -117,12 +156,10 @@ function isPolicyCoolingDown(
     return false;
   }
 
-  const recentRange = recentPolicyIds.slice(-cooldown);
-
-  return recentRange.includes(policy.id);
+  return recentPolicyIds.slice(-cooldown).includes(policy.id);
 }
 
-// 再出題不可の政策が既に実行済みか確認する
+// 再出題不可の政策が実行済みか確認する
 function isCompletedNonRepeatablePolicy(
   policy: Policy,
   completedPolicyIds: string[],
@@ -132,11 +169,12 @@ function isCompletedNonRepeatablePolicy(
   return !repeatable && completedPolicyIds.includes(policy.id);
 }
 
-// 条件をすべて満たす政策だけを抽出する
+// 条件を満たす政策だけを抽出する
 export function getEligiblePolicies({
   policies,
   city,
   category,
+  activeDevelopmentModel = null,
   completedPolicyIds = [],
   recentPolicyIds = [],
 }: PolicySelectionOptions): Policy[] {
@@ -146,6 +184,10 @@ export function getEligiblePolicies({
     }
 
     if (!matchesDevelopmentStage(policy, city)) {
+      return false;
+    }
+
+    if (!matchesDevelopmentModel(policy, activeDevelopmentModel)) {
       return false;
     }
 
@@ -165,7 +207,10 @@ export function getEligiblePolicies({
   });
 }
 
-// 政策分野と街評価の対応関係
+// ==================================================
+// 街の弱点による出題確率の調整
+// ==================================================
+
 function getDomainScoreKey(policy: Policy): CityScoreKey | null {
   switch (policy.domain) {
     case "transport":
@@ -186,7 +231,6 @@ function getDomainScoreKey(policy: Policy): CityScoreKey | null {
     case "trust":
       return "trust";
 
-    // 都市基盤の弱さは交通評価に反映される
     case "infrastructure":
       return "transport";
 
@@ -195,10 +239,11 @@ function getDomainScoreKey(policy: Policy): CityScoreKey | null {
   }
 }
 
-// 街の弱点に関係する政策ほど出やすくする
+// 評価が低い分野の政策ほど重みを大きくする
 function calculatePolicyWeight(policy: Policy, city: CityState): number {
   const scores = calculateCityScores(city);
   const baseWeight = Math.max(0.1, policy.weight ?? 1);
+
   const scoreKey = getDomainScoreKey(policy);
 
   if (!scoreKey) {
@@ -222,8 +267,15 @@ function calculatePolicyWeight(policy: Policy, city: CityState): number {
   return baseWeight;
 }
 
-// 重みに基づいて政策候補から1つ選ぶ
-function selectByWeight(policies: Policy[], city: CityState): Policy | null {
+// ==================================================
+// 重み付き抽選
+// ==================================================
+
+function selectByWeight(
+  policies: Policy[],
+  city: CityState,
+  random: () => number,
+): Policy | null {
   if (policies.length === 0) {
     return null;
   }
@@ -238,7 +290,7 @@ function selectByWeight(policies: Policy[], city: CityState): Policy | null {
     0,
   );
 
-  let randomPosition = Math.random() * totalWeight;
+  let randomPosition = random() * totalWeight;
 
   for (const item of weightedPolicies) {
     randomPosition -= item.weight;
@@ -251,42 +303,185 @@ function selectByWeight(policies: Policy[], city: CityState): Policy | null {
   return weightedPolicies[weightedPolicies.length - 1].policy;
 }
 
-// 現在の状況に合う次の政策を選択する
+// ==================================================
+// 共通の政策選択
+// ==================================================
+
 export function selectNextPolicy(
   options: PolicySelectionOptions,
 ): Policy | null {
-  // 発展段階、出現条件、実行履歴、クールダウンを考慮
+  const random = options.random ?? Math.random;
+
+  // すべての条件を適用して選ぶ
   const eligiblePolicies = getEligiblePolicies(options);
 
   if (eligiblePolicies.length > 0) {
-    return selectByWeight(eligiblePolicies, options.city);
+    return selectByWeight(eligiblePolicies, options.city, random);
   }
 
-  // 候補がなくなった場合はクールダウンだけ解除する
-  const policiesWithoutCooldown = getEligiblePolicies({
+  // 候補がなければクールダウンだけ解除する
+  const withoutCooldown = getEligiblePolicies({
     ...options,
     recentPolicyIds: [],
   });
 
-  if (policiesWithoutCooldown.length > 0) {
-    return selectByWeight(policiesWithoutCooldown, options.city);
+  if (withoutCooldown.length > 0) {
+    return selectByWeight(withoutCooldown, options.city, random);
   }
 
-  // それでもなければ、同カテゴリー・同段階から選ぶ
-  const stageFallbackPolicies = options.policies.filter(
-    (policy) =>
-      matchesCategory(policy, options.category) &&
-      matchesDevelopmentStage(policy, options.city),
-  );
+  return null;
+}
 
-  if (stageFallbackPolicies.length > 0) {
-    return selectByWeight(stageFallbackPolicies, options.city);
+// ==================================================
+// 通常政策
+// ==================================================
+
+export function selectRegularPolicy(
+  policies: Policy[],
+  city: CityState,
+  completedPolicyIds: string[],
+  recentPolicyIds: string[],
+  random: () => number = Math.random,
+): Policy | null {
+  return selectNextPolicy({
+    policies,
+    city,
+    category: "regularPolicy",
+    completedPolicyIds,
+    recentPolicyIds,
+    random,
+  });
+}
+
+// ==================================================
+// 発展段階の戦略課題
+// ==================================================
+
+export function selectStageStrategyPolicy(
+  policies: Policy[],
+  city: CityState,
+  completedPolicyIds: string[],
+): StrategyPolicy | null {
+  const selectedPolicy = selectNextPolicy({
+    policies,
+    city,
+    category: "stageStrategy",
+    completedPolicyIds,
+    recentPolicyIds: [],
+  });
+
+  if (!selectedPolicy || selectedPolicy.type !== "strategy") {
+    return null;
   }
 
-  // 最後に同じカテゴリーの全政策から選ぶ
-  const categoryFallbackPolicies = options.policies.filter((policy) =>
-    matchesCategory(policy, options.category),
-  );
+  return selectedPolicy;
+}
 
-  return selectByWeight(categoryFallbackPolicies, options.city);
+// ==================================================
+// 戦略見直しイベント
+// ==================================================
+
+// 戦略見直しを出す年度か判定する
+export function shouldTriggerStrategyReview({
+  city,
+  lastStrategyReviewYear,
+  availableReviewCount,
+  random = Math.random,
+}: StrategyReviewTriggerOptions): boolean {
+  // 選べる見直しイベントがなければ出さない
+  if (availableReviewCount <= 0) {
+    return false;
+  }
+
+  // 創生期と5年目までは現在戦略を試してもらう
+  if (city.stage === "creation" || city.year < 6) {
+    return false;
+  }
+
+  const yearsSinceLastReview =
+    lastStrategyReviewYear === null
+      ? city.year
+      : city.year - lastStrategyReviewYear;
+
+  // 前回から4年以内は連続して出さない
+  if (yearsSinceLastReview < 5) {
+    return false;
+  }
+
+  // 10年以上見直しがなければ必ず出す
+  if (yearsSinceLastReview >= 10) {
+    return true;
+  }
+
+  const scores = calculateCityScores(city);
+
+  // 総合評価が低いほど、方針転換論が出やすい
+  let triggerProbability = 0.12;
+
+  if (scores.overall < 55) {
+    triggerProbability += 0.08;
+  }
+
+  if (scores.overall < 40) {
+    triggerProbability += 0.1;
+  }
+
+  // 財政危機では別戦略への誘惑が強くなる
+  if (scores.finance < 30) {
+    triggerProbability += 0.08;
+  }
+
+  return random() < triggerProbability;
+}
+
+// 現在モデルに合う戦略見直しを選ぶ
+export function selectStrategyReview(
+  policies: Policy[],
+  city: CityState,
+  activeDevelopmentModel: DevelopmentModel,
+  completedPolicyIds: string[],
+  random: () => number = Math.random,
+): StrategyPolicy | null {
+  const selectedPolicy = selectNextPolicy({
+    policies,
+    city,
+    category: "strategyReview",
+    activeDevelopmentModel,
+    completedPolicyIds,
+    recentPolicyIds: [],
+    random,
+  });
+
+  if (!selectedPolicy || selectedPolicy.type !== "strategy") {
+    return null;
+  }
+
+  return selectedPolicy;
+}
+
+// ==================================================
+// 戦略変更の判定
+// ==================================================
+
+// 選択肢IDから、新しい成長モデルを判定する
+// nullの場合は現在モデルを維持する
+export function getDevelopmentModelFromOption(
+  optionId: string,
+): DevelopmentModel | null {
+  switch (optionId) {
+    case "model-industry":
+    case "switch-to-industry":
+      return "industry";
+
+    case "model-tourism":
+    case "switch-to-tourism":
+      return "tourism";
+
+    case "model-living":
+    case "switch-to-living":
+      return "living";
+
+    default:
+      return null;
+  }
 }
