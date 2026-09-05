@@ -1,16 +1,27 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { StrategyPolicy } from "../types/game";
+import type { StrategyPolicy } from "../types/game";
 
 // PolicyCardが受け取るデータ
 type PolicyCardProps = {
+  // 「都市戦略」「政策戦略」などの表示
+  category?: string;
+
+  // 表示する政策データ
   policy: StrategyPolicy;
+
+  // 現在選択されている選択肢
   selectedOptionId: string | null;
+
+  // 選択肢を押したときの処理
   onSelectOption: (optionId: string) => void;
+
+  // 政策を実行するときの処理
   onExecute: () => void;
 };
 
 export function PolicyCard({
+  category = "都市戦略",
   policy,
   selectedOptionId,
   onSelectOption,
@@ -18,25 +29,29 @@ export function PolicyCard({
 }: PolicyCardProps) {
   return (
     <View style={styles.card}>
-      {/* 政策課題の種類 */}
+      {/* 政策の種類とゲーム理論 */}
       <View style={styles.meta}>
-        <Text style={styles.category}>都市戦略</Text>
+        <Text style={styles.category}>{category}</Text>
+
         <Text style={styles.theory}>{policy.theory}</Text>
       </View>
 
       {/* 政策課題の内容 */}
       <Text style={styles.title}>{policy.title}</Text>
+
       <Text style={styles.description}>{policy.description}</Text>
 
+      {/* 政策が発生した理由 */}
       <View style={styles.reasonBox}>
         <Text style={styles.reasonLabel}>発生理由</Text>
+
         <Text style={styles.reason}>{policy.reason}</Text>
       </View>
 
       <Text style={styles.choiceLabel}>戦略を選択</Text>
 
-      {/* policy.optionsの数だけ選択肢を表示 */}
-      {policy.options.map((option) => {
+      {/* 選択肢を繰り返し表示する */}
+      {policy.options.map((option, index) => {
         const isSelected = selectedOptionId === option.id;
 
         return (
@@ -45,18 +60,31 @@ export function PolicyCard({
             style={[styles.option, isSelected && styles.selectedOption]}
             onPress={() => onSelectOption(option.id)}
           >
-            <Text
-              style={[styles.optionTitle, isSelected && styles.selectedText]}
-            >
-              {option.label}
-            </Text>
+            <View style={styles.optionNumber}>
+              <Text
+                style={[
+                  styles.optionNumberText,
+                  isSelected && styles.selectedNumberText,
+                ]}
+              >
+                {String(index + 1).padStart(2, "0")}
+              </Text>
+            </View>
 
-            <Text style={styles.optionDescription}>{option.description}</Text>
+            <View style={styles.optionContent}>
+              <Text
+                style={[styles.optionTitle, isSelected && styles.selectedTitle]}
+              >
+                {option.label}
+              </Text>
+
+              <Text style={styles.optionDescription}>{option.description}</Text>
+            </View>
           </Pressable>
         );
       })}
 
-      {/* 戦略未選択の場合は押せない */}
+      {/* 選択肢を選ぶまでは押せない */}
       <Pressable
         disabled={selectedOptionId === null}
         style={[
@@ -66,6 +94,10 @@ export function PolicyCard({
         onPress={onExecute}
       >
         <Text style={styles.executeButtonText}>この戦略を実行</Text>
+
+        <Text style={styles.executeButtonDescription}>
+          選択した方針を街へ反映する
+        </Text>
       </Pressable>
     </View>
   );
@@ -84,9 +116,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 10,
   },
 
   category: {
+    flex: 1,
     color: "#65717D",
     fontSize: 13,
     fontWeight: "bold",
@@ -107,6 +141,7 @@ const styles = StyleSheet.create({
     color: "#142436",
     fontSize: 24,
     fontWeight: "bold",
+    lineHeight: 34,
   },
 
   description: {
@@ -147,12 +182,15 @@ const styles = StyleSheet.create({
 
   option: {
     marginBottom: 8,
-    padding: 14,
+    padding: 12,
     backgroundColor: "#F5F1E7",
     borderWidth: 1,
     borderColor: "#D1CEC6",
     borderLeftWidth: 5,
     borderLeftColor: "#C8C5BC",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
 
   selectedOption: {
@@ -161,13 +199,32 @@ const styles = StyleSheet.create({
     borderLeftColor: "#347F9E",
   },
 
+  optionNumber: {
+    width: 30,
+    alignItems: "center",
+  },
+
+  optionNumberText: {
+    color: "#C95D36",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  selectedNumberText: {
+    color: "#347F9E",
+  },
+
+  optionContent: {
+    flex: 1,
+  },
+
   optionTitle: {
     color: "#142436",
     fontSize: 15,
     fontWeight: "bold",
   },
 
-  selectedText: {
+  selectedTitle: {
     color: "#205F7A",
   },
 
@@ -180,7 +237,7 @@ const styles = StyleSheet.create({
 
   executeButton: {
     marginTop: 12,
-    padding: 16,
+    padding: 15,
     backgroundColor: "#0D2538",
     borderRadius: 6,
   },
@@ -193,6 +250,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "bold",
+    textAlign: "center",
+  },
+
+  executeButtonDescription: {
+    marginTop: 2,
+    color: "#B9CCD6",
+    fontSize: 11,
     textAlign: "center",
   },
 });
