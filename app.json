@@ -23,7 +23,7 @@
         "NSPrivacyTrackingDomains": [],
         "NSPrivacyCollectedDataTypes": [
           {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeGameplayContent",
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
             "NSPrivacyCollectedDataTypeLinked": false,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
